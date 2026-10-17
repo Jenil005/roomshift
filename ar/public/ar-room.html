@@ -1,68 +1,257 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#07141c">
-  <title>RoomShift | Markerless Life-Size AR Facility</title>
-  <style>
-    :root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #eefcf2; }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; width: 100%; margin: 0; background: #07141c; overflow: hidden; }
-    #viewport, #viewport canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
-    #viewport { touch-action: none; }
-    #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); pointer-events: none; z-index: 20; }
-    .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
-    .brand { font-size: 16px; font-weight: 850; letter-spacing: .16em; text-shadow: 0 2px 10px #000c; }
-    .brand small { display: block; font-size: 9px; letter-spacing: .16em; color: #d2f68c; margin-top: 6px; }
-    #status { font-size: 10px; line-height: 1.5; text-align: right; letter-spacing: .11em; font-weight: 700; background: #061419dd; border: 1px solid #81c8ae70; padding: 8px 10px; border-radius: 8px; max-width: 170px; }
-    .bottom { margin: 0 auto; max-width: 710px; width: 100%; display: flex; align-items: center; flex-direction: column; gap: 12px; }
-    .tip { border: 1px solid #669f9577; border-radius: 11px; padding: 12px 14px; background: #061419e9; font-size: 12px; line-height: 1.55; text-align: center; width: 100%; max-width: 510px; backdrop-filter: blur(8px); }
-    .buttons { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; pointer-events: auto; width: 100%; }
-    button, .link { padding: 12px 13px; color: #f1fffa; font: 700 11px system-ui, sans-serif; background: #183039e8; border: 1px solid #759f9e77; border-radius: 8px; text-decoration: none; cursor: pointer; min-height: 44px; }
-    button.primary { color: #132519; background: #d3f88a; border-color: #d3f88a; }
-    button:disabled { opacity: .45; cursor: default; }
-    button:focus-visible, .link:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
-    .legal { color: #d8eae5; font: 10px/1.45 system-ui, sans-serif; text-align: center; text-shadow: 0 2px 4px black; }
-    @media (max-width: 550px) {
-      #overlay { padding-left: 10px; padding-right: 10px; }
-      .brand { font-size: 13px; }
-      .brand small { font-size: 8px; }
-      #status { font-size: 9px; max-width: 145px; }
-      .buttons { gap: 5px; }
-      button, .link { font-size: 10px; padding: 10px; min-height: 40px; }
-      .tip { font-size: 11px; }
-    }
-  </style>
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#07141c" />
+    <title>RoomShift | iPhone WebAR Facility Prototype</title>
+    <!-- XR Engine developed by Niantic Spatial, Inc. Copyright © 2026 Niantic Spatial, Inc.
+       All rights reserved. Licensed under the XR Engine License Agreement.
+       Provided AS IS, without warranties: see ./vendor/8thwall/LICENSE.
+       https://github.com/8thwall/engine/blob/main/LICENSE -->
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        color: #eefcf2;
       }
-    }
-  </script>
-</head>
-<body>
-  <div id="viewport" aria-label="3D preview or immersive AR scene"></div>
-  <div id="overlay">
-    <div class="row">
-      <div class="brand">ROOMSHIFT<small>BLACKOUT PROTOCOL / ROOM-SCALE AR</small></div>
-      <div id="status" role="status" aria-live="polite">INITIALIZING</div>
-    </div>
-    <div class="bottom">
-      <p id="instructions" class="tip">Place a life-size research facility on your real floor, then walk around inside it. No printed markers are used.</p>
-      <div class="buttons">
-        <button id="start-ar" class="primary">START AR</button>
-        <button id="place-room" disabled>PLACE ROOM</button>
-        <button id="reset-room" disabled>MOVE ROOM</button>
-        <button id="restore-power" disabled>RESTORE POWER</button>
-        <button id="preview-room">3D PREVIEW</button>
-        <a class="link" href="/">QR PUZZLE ↗</a>
+      * {
+        box-sizing: border-box;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        background: #07141c;
+        overflow: hidden;
+      }
+      #viewport,
+      #viewport canvas,
+      #camera-feed {
+        position: fixed;
+        inset: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      #viewport,
+      #camera-feed {
+        touch-action: none;
+      }
+      #aim {
+        position: fixed;
+        left: 50%;
+        top: 60%;
+        transform: translate(-50%, -50%);
+        color: #d3f88a;
+        font-size: 24px;
+        text-shadow: 0 1px 4px black;
+        pointer-events: none;
+        z-index: 5;
+      }
+      .legal a {
+        color: #d3f88a;
+        pointer-events: auto;
+      }
+      .legal {
+        padding-bottom: 4px;
+      }
+      #overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: max(18px, env(safe-area-inset-top)) 18px
+          max(18px, env(safe-area-inset-bottom));
+        pointer-events: none;
+        z-index: 20;
+      }
+      .row {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+      }
+      .brand {
+        font-size: 16px;
+        font-weight: 850;
+        letter-spacing: 0.16em;
+        text-shadow: 0 2px 10px #000c;
+      }
+      .brand small {
+        display: block;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: #d2f68c;
+        margin-top: 6px;
+      }
+      #status {
+        font-size: 10px;
+        line-height: 1.5;
+        text-align: right;
+        letter-spacing: 0.11em;
+        font-weight: 700;
+        background: #061419dd;
+        border: 1px solid #81c8ae70;
+        padding: 8px 10px;
+        border-radius: 8px;
+        max-width: 170px;
+      }
+      .bottom {
+        margin: 0 auto;
+        max-width: 710px;
+        width: 100%;
+        display: flex;
+        align-items: center;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .tip {
+        border: 1px solid #669f9577;
+        border-radius: 11px;
+        padding: 12px 14px;
+        background: #061419e9;
+        font-size: 12px;
+        line-height: 1.55;
+        text-align: center;
+        width: 100%;
+        max-width: 510px;
+        backdrop-filter: blur(8px);
+      }
+      .buttons {
+        display: flex;
+        justify-content: center;
+        flex-wrap: wrap;
+        gap: 9px;
+        pointer-events: auto;
+        width: 100%;
+      }
+      button,
+      .link {
+        padding: 12px 13px;
+        color: #f1fffa;
+        font:
+          700 11px system-ui,
+          sans-serif;
+        background: #183039e8;
+        border: 1px solid #759f9e77;
+        border-radius: 8px;
+        text-decoration: none;
+        cursor: pointer;
+        min-height: 44px;
+      }
+      button.primary {
+        color: #132519;
+        background: #d3f88a;
+        border-color: #d3f88a;
+      }
+      button:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+      button:focus-visible,
+      .link:focus-visible {
+        outline: 2px solid #ffffff;
+        outline-offset: 3px;
+      }
+      .legal {
+        color: #d8eae5;
+        font:
+          10px/1.45 system-ui,
+          sans-serif;
+        text-align: center;
+        text-shadow: 0 2px 4px black;
+      }
+      @media (max-width: 550px) {
+        #overlay {
+          padding-left: 10px;
+          padding-right: 10px;
+        }
+        .brand {
+          font-size: 13px;
+        }
+        .brand small {
+          font-size: 8px;
+        }
+        #status {
+          font-size: 9px;
+          max-width: 145px;
+        }
+        .buttons {
+          gap: 5px;
+        }
+        button,
+        .link {
+          font-size: 10px;
+          padding: 10px;
+          min-height: 40px;
+        }
+        .tip {
+          font-size: 11px;
+        }
+      }
+    </style>
+    <script type="importmap">
+      {
+        "imports": {
+          "three": "./vendor/three/three.module.js",
+          "three/addons/controls/": "./vendor/three/controls/"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div id="viewport" aria-label="Desktop 3D preview, not camera AR"></div>
+    <canvas
+      id="camera-feed"
+      aria-label="8th Wall world-tracked camera view"
+      hidden
+    ></canvas>
+    <span id="aim" aria-hidden="true" hidden>+</span>
+    <div id="overlay">
+      <div class="row">
+        <div class="brand">
+          ROOMSHIFT<small>BLACKOUT PROTOCOL / iPHONE WEBAR PROTOTYPE</small>
+        </div>
+        <div id="status" role="status" aria-live="polite">INITIALIZING</div>
       </div>
-      <div class="legal">3.4m × 3.4m × 2.5m · MARKERLESS FLOOR TRACKING · KEEP YOUR REAL SURROUNDINGS VISIBLE · HTTPS ON PHONE</div>
+      <div class="bottom">
+        <p id="instructions" class="tip">
+          Place a life-size research facility on your real floor, then walk
+          around inside it. No printed markers are used.
+        </p>
+        <div class="buttons">
+          <button id="start-ar" class="primary">START AR</button>
+          <button id="place-room" disabled>PLACE ROOM</button>
+          <button id="reset-room" disabled>REPOSITION</button>
+          <button id="restore-power" disabled>RESTORE POWER</button>
+          <button id="preview-room">3D PREVIEW</button>
+          <a class="link" href="./">QR PUZZLE ↗</a>
+        </div>
+        <div class="legal">
+          3.4m × 3.4m × 2.5m · ESTIMATED SCALE / GROUND · LOCAL DEMO<br />
+          Physical iPhone validation pending. Keep your real surroundings
+          visible.<br />
+          8th Wall engine by Niantic Spatial, Inc. © 2026 ·
+          <a href="./room-attribution.html" target="_blank" rel="noopener"
+            >Licenses &amp; AS-IS warranty disclaimer</a
+          >
+        </div>
+      </div>
     </div>
-  </div>
-  <script type="module" src="/ar-room.js"></script>
-</body>
+    <script type="module" src="./ar-room.js"></script>
+  </body>
 </html>

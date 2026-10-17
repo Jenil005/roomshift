@@ -37,3 +37,6 @@ tmp/
 # Browser test artifacts
 playwright-report/
 test-results/
+
+# Unmodified, locally copied AR runtime (generated from the pinned npm packages)
+ar/public/vendor/
