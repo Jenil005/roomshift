@@ -10,6 +10,8 @@ import { FinalOverride } from "./screens/FinalOverride";
 import { Complete } from "./screens/Complete";
 import { Failed } from "./screens/Failed";
 import { DevPanel } from "./dev/DevPanel";
+import { DebugOverlay } from "./dev/DebugOverlay";
+import { FacilityLauncher } from "./facility/launcher";
 import type { ConnectionStatus } from "./game/GameClient";
 
 // Three.js and the facility load only when a player opens it.
@@ -46,8 +48,16 @@ export default function App() {
   const inMission = !!room && room.phase !== "LOBBY" && room.phase !== "READY";
   const showFacility = facilityOpen && inMission;
 
+  // Each phase is a new screen: start it at the top, not at the previous screen's scroll.
+  const screenKey = `${room?.phase ?? "home"}:${showFacility}`;
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [screenKey]);
+
+  const openFacility = inMission ? () => setFacilityOpen(true) : null;
+
   return (
-    <>
+    <FacilityLauncher.Provider value={openFacility}>
       <PwaStatus />
       {/* The facility and the mission screens never mount together: one camera owner at a time. */}
       {showFacility ? (
@@ -57,14 +67,10 @@ export default function App() {
       ) : (
         <Router />
       )}
-      {inMission && !showFacility && (
-        <button type="button" className="facility-open" onClick={() => setFacilityOpen(true)}>
-          FACILITY · AR
-        </button>
-      )}
       <div className="scanlines" aria-hidden />
       <DevPanel />
-    </>
+      <DebugOverlay />
+    </FacilityLauncher.Provider>
   );
 }
 

@@ -13,9 +13,9 @@ export function DevPanel() {
   const bots = open ? demoInfo().bots : [];
 
   return (
-    <aside className="fixed bottom-2 left-2 right-2 z-[60] mx-auto max-w-md border-2 border-emergency bg-void/95 p-2 text-[14px]">
+    <aside className={`fixed bottom-2 left-2 z-[60] max-w-md border-2 border-emergency bg-void/95 p-2 text-[14px] ${open ? "right-2 mx-auto" : ""}`}>
       <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left font-display text-emergency">
-        {open ? "▼" : "▶"} DEMO: bot teammates’ private clues
+        {open ? "▼ DEMO: bot teammates’ private clues" : "▶ BOT CLUES"}
       </button>
       {open && (
         <ul className="m-0 mt-1 flex max-h-[30dvh] list-none flex-col gap-1 overflow-y-auto p-0">

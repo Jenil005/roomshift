@@ -1,5 +1,6 @@
 import { useGame } from "../game/useGame";
 import { ROLE_TITLE } from "../game/content";
+import { FacilityButton } from "./FacilityButton";
 import { formatClock, useServerNow } from "./time";
 
 // Room events are bounded, so remember each room's start once seen (lost on reload: the clock hides).
@@ -18,6 +19,7 @@ export function MissionHeader({ step, title }: { step: string; title: string }) 
         <span className="font-display text-[18px] font-bold text-label">MISSION</span>
         <span className="h-[3px] flex-1 bg-rule" />
         {started && <span className="font-numeric text-[20px] font-bold text-phosphor" role="timer" aria-label="Mission time">{formatClock(now - started)}</span>}
+        <FacilityButton />
       </div>
       <div className="flex flex-wrap items-baseline gap-x-3">
         <span className="text-label">{step}</span>

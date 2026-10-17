@@ -3,6 +3,38 @@ import { PLAYER_NAME_MAX_LENGTH, ROOM_CODE_LENGTH } from "@shared/constants";
 import { useGame } from "../game/useGame";
 import { Button, ErrorLine, Screen } from "../ui/kit";
 
+const HINT_KEY = "roomshift.iosHintDismissed";
+const isIosSafari = () =>
+  /iPhone|iPad|iPod/.test(navigator.userAgent) &&
+  !/CriOS|FxiOS|EdgiOS/.test(navigator.userAgent) &&
+  !window.matchMedia("(display-mode: standalone)").matches;
+
+/** Safari on iOS has no install prompt: say how to add RoomShift to the Home Screen. */
+function IosInstallHint() {
+  const [show, setShow] = useState(() => {
+    try {
+      return isIosSafari() && localStorage.getItem(HINT_KEY) !== "1";
+    } catch {
+      return isIosSafari();
+    }
+  });
+  if (!show) return null;
+  const dismiss = () => {
+    setShow(false);
+    try {
+      localStorage.setItem(HINT_KEY, "1");
+    } catch {
+      // per-device convenience only
+    }
+  };
+  return (
+    <p className="m-0 flex items-start gap-2 bg-inset p-3 text-[16px] text-soft bevel-sunken">
+      <span className="flex-1">Install: tap Share, then “Add to Home Screen”. It opens full-screen like an app.</span>
+      <button type="button" className="min-h-11 px-2 text-label" onClick={dismiss} aria-label="Dismiss install hint">✕</button>
+    </p>
+  );
+}
+
 export function Home() {
   const { send, pending, lastError, resuming, clearError } = useGame();
   const initialCode = new URLSearchParams(window.location.search).get("room") ?? ""; // QR codes can link to ?room=KXQB
@@ -57,6 +89,7 @@ export function Home() {
         <Button variant="secondary" className="flex-1" onClick={join} disabled={busy}>{pending === "room:join" ? "Joining…" : "Join"}</Button>
       </div>
       <ErrorLine message={error ?? lastError?.message ?? null} />
+      <IosInstallHint />
     </Screen>
   );
 }
