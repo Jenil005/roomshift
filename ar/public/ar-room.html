@@ -1,166 +1,68 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#061014" />
-  <title>RoomShift | AR Facility Room</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07141c">
+  <title>RoomShift | Markerless Life-Size AR Facility</title>
   <style>
-    :root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #f2fff3; }
+    :root { color-scheme: dark; font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif; color: #eefcf2; }
     * { box-sizing: border-box; }
-    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #061014; }
-    a-scene { position: absolute !important; inset: 0; width: 100%; height: 100%; }
-    .hud { position: fixed; z-index: 30; inset: 0; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; padding: max(20px, env(safe-area-inset-top)) 20px max(20px, env(safe-area-inset-bottom)); }
-    .top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-    .brand { letter-spacing: .16em; font-size: 13px; font-weight: 800; text-shadow: 0 2px 10px #000; }
-    .brand small { display: block; color: #bded78; font-size: 9px; letter-spacing: .24em; font-weight: 600; margin-top: 6px; }
-    .status { font-size: 10px; font-weight: 700; letter-spacing: .1em; text-align: right; border: 1px solid #aabdc060; border-radius: 100px; padding: 9px 11px; background: #061014b9; }
-    .status.found { color: #d3ff8a; border-color: #a6ff5770; }
-    .bottom { display: flex; flex-direction: column; gap: 12px; align-items: center; }
-    .hint { max-width: 370px; width: 100%; text-align: center; padding: 14px 18px; border: 1px solid #a4d19650; background: #061014d9; border-radius: 13px; font-size: 13px; line-height: 1.5; }
-    .controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; pointer-events: auto; }
-    .btn { cursor: pointer; border: 1px solid #8faa8290; border-radius: 8px; padding: 13px 15px; background: #16271fed; color: white; font-size: 12px; font-weight: 700; text-decoration: none; text-align: center; }
-    .btn.primary { color: #152310; background: #d3f88a; border-color: #d3f88a; }
-    .btn:focus-visible { outline: 3px solid white; outline-offset: 3px; }
-    .btn:disabled { opacity: .5; cursor: not-allowed; }
-    .tiny { color: #d9e8dc; font-size: 10px; text-align: center; text-shadow: 0 1px 3px black; }
-    @media (max-width: 520px) { .brand { font-size: 11px; } .status { font-size: 9px; } .hud { padding-left: 12px; padding-right: 12px; } }
+    html, body { height: 100%; width: 100%; margin: 0; background: #07141c; overflow: hidden; }
+    #viewport, #viewport canvas { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+    #viewport { touch-action: none; }
+    #overlay { position: fixed; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); pointer-events: none; z-index: 20; }
+    .row { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; }
+    .brand { font-size: 16px; font-weight: 850; letter-spacing: .16em; text-shadow: 0 2px 10px #000c; }
+    .brand small { display: block; font-size: 9px; letter-spacing: .16em; color: #d2f68c; margin-top: 6px; }
+    #status { font-size: 10px; line-height: 1.5; text-align: right; letter-spacing: .11em; font-weight: 700; background: #061419dd; border: 1px solid #81c8ae70; padding: 8px 10px; border-radius: 8px; max-width: 170px; }
+    .bottom { margin: 0 auto; max-width: 710px; width: 100%; display: flex; align-items: center; flex-direction: column; gap: 12px; }
+    .tip { border: 1px solid #669f9577; border-radius: 11px; padding: 12px 14px; background: #061419e9; font-size: 12px; line-height: 1.55; text-align: center; width: 100%; max-width: 510px; backdrop-filter: blur(8px); }
+    .buttons { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; pointer-events: auto; width: 100%; }
+    button, .link { padding: 12px 13px; color: #f1fffa; font: 700 11px system-ui, sans-serif; background: #183039e8; border: 1px solid #759f9e77; border-radius: 8px; text-decoration: none; cursor: pointer; min-height: 44px; }
+    button.primary { color: #132519; background: #d3f88a; border-color: #d3f88a; }
+    button:disabled { opacity: .45; cursor: default; }
+    button:focus-visible, .link:focus-visible { outline: 2px solid #ffffff; outline-offset: 3px; }
+    .legal { color: #d8eae5; font: 10px/1.45 system-ui, sans-serif; text-align: center; text-shadow: 0 2px 4px black; }
+    @media (max-width: 550px) {
+      #overlay { padding-left: 10px; padding-right: 10px; }
+      .brand { font-size: 13px; }
+      .brand small { font-size: 8px; }
+      #status { font-size: 9px; max-width: 145px; }
+      .buttons { gap: 5px; }
+      button, .link { font-size: 10px; padding: 10px; min-height: 40px; }
+      .tip { font-size: 11px; }
+    }
   </style>
-  <!-- Standalone experiment: pinned A-Frame + AR.js marker tracking. Requires HTTPS on phones. -->
-  <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
-  <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.8/aframe/build/aframe-ar.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
-  <a-scene
-    embedded
-    vr-mode-ui="enabled: false"
-    device-orientation-permission-ui="enabled: false"
-    renderer="antialias: true; alpha: true; precision: medium"
-    arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono;"
-  >
-    <!-- Tracking reference is a Hiro marker, NOT the three jsQR gameplay markers. -->
-    <a-marker id="room-anchor" preset="hiro" emitevents="true" smooth="true" smoothCount="5" smoothTolerance="0.01" smoothThreshold="2">
-      <a-entity id="facility" position="0 0.015 0">
-        <!-- Sci-fi room base. Open front: camera can see inside from many angles. -->
-        <a-box position="0 -0.035 0" width="1.60" height="0.07" depth="1.42" color="#121c21"></a-box>
-        <a-plane rotation="-90 0 0" position="0 0.003 0" width="1.56" height="1.38"
-          material="color: #25343b; metalness: 0.15; roughness: 0.75"></a-plane>
-        <a-box position="0 0.45 -0.68" width="1.60" height="0.9" depth="0.06"
-          material="color: #1b2a35; metalness: 0.2; roughness: 0.7"></a-box>
-        <a-box position="-0.78 0.45 0" width="0.035" height="0.90" depth="1.38"
-          material="color: #22353b; transparent: true; opacity: 0.70"></a-box>
-        <a-box position="0.78 0.45 0" width="0.035" height="0.90" depth="1.38"
-          material="color: #22353b; transparent: true; opacity: 0.70"></a-box>
-
-        <!-- Lab flooring and illuminated tracks. -->
-        <a-box position="-0.27 0.010 0" width="0.012" height="0.008" depth="1.33" color="#41565b"></a-box>
-        <a-box position="0.27 0.010 0" width="0.012" height="0.008" depth="1.33" color="#41565b"></a-box>
-        <a-box position="0 0.012 -0.30" width="1.48" height="0.008" depth="0.013" color="#41565b"></a-box>
-        <a-box position="0 0.012 0.30" width="1.48" height="0.008" depth="0.013" color="#41565b"></a-box>
-        <a-box position="0 0.022 0.62" width="1.40" height="0.01" depth="0.015"
-          material="color: #b3f878; emissive: #4a8f27; emissiveIntensity: 0.6"></a-box>
-
-        <!-- Power-control wall with emissive panels. -->
-        <a-box position="0 0.56 -0.635" width="0.85" height="0.42" depth="0.030" color="#0a161e"></a-box>
-        <a-plane position="0 0.56 -0.613" width="0.72" height="0.31"
-          material="color: #0d3740; emissive: #0b6c69; emissiveIntensity: 0.4" class="power-light"></a-plane>
-        <a-text value="BLACKOUT PROTOCOL" align="center" color="#c4fc94" width="1.30"
-          position="0 0.65 -0.595"></a-text>
-        <a-text id="power-label" value="CORE OFFLINE" align="center" color="#ff918b" width="1.10"
-          position="0 0.48 -0.595"></a-text>
-        <a-box position="-0.58 0.58 -0.635" width="0.16" height="0.29" depth="0.03" color="#14242d"></a-box>
-        <a-box position="0.58 0.58 -0.635" width="0.16" height="0.29" depth="0.03" color="#14242d"></a-box>
-
-        <!-- Open frame so the 3D room is recognizable from the side. -->
-        <a-box position="-0.71 0.89 -0.66" width="0.055" height="0.06" depth="0.08" color="#8caf70"></a-box>
-        <a-box position="0.71 0.89 -0.66" width="0.055" height="0.06" depth="0.08" color="#8caf70"></a-box>
-        <a-box position="0 0.91 -0.66" width="1.48" height="0.045" depth="0.08" color="#425b51"></a-box>
-        <a-box position="-0.74 0.90 0" width="0.04" height="0.06" depth="1.32" color="#425b51"></a-box>
-        <a-box position="0.74 0.90 0" width="0.04" height="0.06" depth="1.32" color="#425b51"></a-box>
-
-        <!-- Three interactive-looking puzzle stations, one per physical object. -->
-        <a-entity position="-0.47 0 0.10">
-          <a-cylinder position="0 0.11 0" radius="0.155" height="0.20" color="#354651"></a-cylinder>
-          <a-cylinder position="0 0.22 0" radius="0.13" height="0.014"
-            material="color: #d4f88a; emissive: #95c643; emissiveIntensity: 0.7" class="power-light"></a-cylinder>
-          <a-box position="0 0.32 0" width="0.15" height="0.16" depth="0.11"
-            material="color: #7db1a5; transparent: true; opacity: 0.85"></a-box>
-          <a-text value="BOOK" align="center" color="#e9f8d7" width="0.65" position="0 0.47 0.05"></a-text>
-        </a-entity>
-        <a-entity position="0 0 0.10">
-          <a-cylinder position="0 0.11 0" radius="0.155" height="0.20" color="#354651"></a-cylinder>
-          <a-cylinder position="0 0.22 0" radius="0.13" height="0.014"
-            material="color: #d4f88a; emissive: #95c643; emissiveIntensity: 0.7" class="power-light"></a-cylinder>
-          <a-cylinder position="0 0.32 0" radius="0.074" height="0.15"
-            material="color: #5daeb7; transparent: true; opacity: 0.85"></a-cylinder>
-          <a-text value="CUP" align="center" color="#e9f8d7" width="0.65" position="0 0.47 0.05"></a-text>
-        </a-entity>
-        <a-entity position="0.47 0 0.10">
-          <a-cylinder position="0 0.11 0" radius="0.155" height="0.20" color="#354651"></a-cylinder>
-          <a-cylinder position="0 0.22 0" radius="0.13" height="0.014"
-            material="color: #d4f88a; emissive: #95c643; emissiveIntensity: 0.7" class="power-light"></a-cylinder>
-          <a-torus position="0 0.32 0" radius="0.073" radius-tubular="0.022" color="#ffd58d"
-            rotation="0 0 20"></a-torus>
-          <a-text value="KEYS" align="center" color="#e9f8d7" width="0.65" position="0 0.47 0.05"></a-text>
-        </a-entity>
-
-        <a-light type="ambient" color="#b1d2d6" intensity="0.8"></a-light>
-        <a-light type="point" color="#b6ff94" intensity="1.15" position="0 0.8 0"></a-light>
-      </a-entity>
-    </a-marker>
-    <a-entity camera></a-entity>
-  </a-scene>
-
-  <div class="hud" aria-live="polite">
-    <div class="top">
-      <div class="brand">ROOMSHIFT<small>BLACKOUT PROTOCOL / FACILITY AR</small></div>
-      <div id="tracking" class="status" role="status">LOOKING FOR MARKER</div>
+  <div id="viewport" aria-label="3D preview or immersive AR scene"></div>
+  <div id="overlay">
+    <div class="row">
+      <div class="brand">ROOMSHIFT<small>BLACKOUT PROTOCOL / ROOM-SCALE AR</small></div>
+      <div id="status" role="status" aria-live="polite">INITIALIZING</div>
     </div>
     <div class="bottom">
-      <div id="instructions" class="hint">Point your camera at the <strong>Hiro tracking marker</strong> to reveal the lab. Move your phone around the marker to see different sides.</div>
-      <div class="controls">
-        <button id="power" class="btn primary" type="button" disabled>RESTORE POWER</button>
-        <a class="btn" href="https://raw.githubusercontent.com/AR-js-org/AR.js/master/data/images/hiro.png" target="_blank" rel="noopener noreferrer">GET HIRO MARKER ↗</a>
-        <a class="btn" href="/">← QR PUZZLE</a>
+      <p id="instructions" class="tip">Place a life-size research facility on your real floor, then walk around inside it. No printed markers are used.</p>
+      <div class="buttons">
+        <button id="start-ar" class="primary">START AR</button>
+        <button id="place-room" disabled>PLACE ROOM</button>
+        <button id="reset-room" disabled>MOVE ROOM</button>
+        <button id="restore-power" disabled>RESTORE POWER</button>
+        <button id="preview-room">3D PREVIEW</button>
+        <a class="link" href="/">QR PUZZLE ↗</a>
       </div>
-      <div class="tiny">EXPERIMENTAL TABLETOP AR · MOBILE REQUIRES HTTPS · KEEP MARKER IN FRAME</div>
+      <div class="legal">3.4m × 3.4m × 2.5m · MARKERLESS FLOOR TRACKING · KEEP YOUR REAL SURROUNDINGS VISIBLE · HTTPS ON PHONE</div>
     </div>
   </div>
-
-  <script>
-    const anchor = document.getElementById("room-anchor");
-    const tracking = document.getElementById("tracking");
-    const instructions = document.getElementById("instructions");
-    const button = document.getElementById("power");
-    const label = document.getElementById("power-label");
-    let powered = false;
-    let trackingMarker = false;
-
-    anchor.addEventListener("markerFound", () => {
-      trackingMarker = true;
-      tracking.textContent = "FACILITY TRACKED";
-      tracking.classList.add("found");
-      instructions.textContent = "The room is anchored to the printed marker. Move sideways or closer to explore it.";
-      button.disabled = false;
-    });
-    anchor.addEventListener("markerLost", () => {
-      trackingMarker = false;
-      tracking.textContent = "MARKER LOST";
-      tracking.classList.remove("found");
-      instructions.textContent = "Bring the Hiro marker back into the camera frame to return to the virtual room.";
-      button.disabled = true;
-    });
-
-    button.addEventListener("click", () => {
-      if (!trackingMarker) return;
-      powered = !powered;
-      label.setAttribute("value", powered ? "CORE ONLINE" : "CORE OFFLINE");
-      label.setAttribute("color", powered ? "#c6ff98" : "#ff918b");
-      document.querySelectorAll(".power-light").forEach((light) => {
-        light.setAttribute("material", "emissiveIntensity", powered ? 1.4 : 0.25);
-      });
-      button.textContent = powered ? "SIMULATE BLACKOUT" : "RESTORE POWER";
-    });
-  </script>
+  <script type="module" src="/ar-room.js"></script>
 </body>
 </html>
