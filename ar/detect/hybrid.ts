@@ -62,7 +62,11 @@ const MATCH_DISTANCE = 0.25;
 export class SightingTracker {
   private tracks: TrackedSighting[] = [];
 
-  constructor(private rememberMs = 800) {}
+  private rememberMs: number;
+
+  constructor(rememberMs = 800) {
+    this.rememberMs = rememberMs;
+  }
 
   reset() {
     this.tracks = [];

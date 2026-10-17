@@ -24,7 +24,12 @@ export class LookControls {
   private orient = { alpha: 0, beta: 0, gamma: 0 };
   private drag: { x: number; y: number } | null = null;
 
-  constructor(private camera: THREE.PerspectiveCamera, private dom: HTMLElement) {
+  private camera: THREE.PerspectiveCamera;
+  private dom: HTMLElement;
+
+  constructor(camera: THREE.PerspectiveCamera, dom: HTMLElement) {
+    this.camera = camera;
+    this.dom = dom;
     this.camera.rotation.order = "YXZ";
     dom.style.touchAction = "none";
     dom.addEventListener("pointerdown", this.onDown);

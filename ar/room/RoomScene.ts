@@ -71,7 +71,12 @@ export class RoomScene {
   private raycaster = new THREE.Raycaster();
   private down: { x: number; y: number } | null = null;
 
-  constructor(private canvas: HTMLCanvasElement, private t: RoomTemplate) {
+  private canvas: HTMLCanvasElement;
+  private t: RoomTemplate;
+
+  constructor(canvas: HTMLCanvasElement, t: RoomTemplate) {
+    this.canvas = canvas;
+    this.t = t;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.scene.background = new THREE.Color(0x05070a);

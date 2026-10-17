@@ -4,11 +4,11 @@ import type { RawDetection } from "./objectClasses";
 export type DetectorErrorCode = "unsupported" | "model-failed" | "timeout";
 
 export class DetectorError extends Error {
-  constructor(
-    readonly code: DetectorErrorCode,
-    message?: string,
-  ) {
+  readonly code: DetectorErrorCode;
+
+  constructor(code: DetectorErrorCode, message?: string) {
     super(message ?? code);
+    this.code = code;
     this.name = "DetectorError";
   }
 }
