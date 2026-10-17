@@ -1,30 +1,32 @@
-import { useGameClient } from "../game/GameProvider";
-import { devJump } from "../game/mockClient";
-import type { Phase } from "../shared/types";
+import { useState } from "react";
+import { useGame, useGameContext } from "../game/useGame";
 
-const PHASES: Phase[] = ["LOBBY", "INTRO", "PUZZLE_1", "PUZZLE_1_COMPLETE", "PUZZLE_2", "FINAL_OVERRIDE", "COMPLETE", "FAILED"];
-
-/** Add ?dev to the URL to jump between screens while building them (mock client only). */
+/**
+ * LOCAL DEMO ONLY (mock mode). Shows the bot teammates' private clues so one person can
+ * play every puzzle against the real engine. Never rendered in live mode.
+ */
 export function DevPanel() {
-  const client = useGameClient();
+  const { demoInfo } = useGameContext();
+  const { room } = useGame();
+  const [open, setOpen] = useState(false);
+  if (!demoInfo || !room) return null;
+  const bots = open ? demoInfo().bots : [];
+
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => devJump(client, "FAILED")}
-        className="fixed bottom-12 left-2 z-[60] border-2 border-fault bg-void px-3 py-2 font-display text-[14px] text-fault"
-      >
-        DEV: SHOW GAME OVER
+    <aside className="fixed bottom-2 left-2 right-2 z-[60] mx-auto max-w-md border-2 border-emergency bg-void/95 p-2 text-[14px]">
+      <button type="button" onClick={() => setOpen((o) => !o)} className="w-full text-left font-display text-emergency">
+        {open ? "▼" : "▶"} DEMO: bot teammates’ private clues
       </button>
-    <select
-      aria-label="Jump to phase"
-      defaultValue=""
-      onChange={(e) => e.target.value && devJump(client, e.target.value as Phase)}
-      className="fixed bottom-2 left-2 z-[60] bg-void p-1 text-[16px] text-phosphor"
-    >
-      <option value="">dev: jump…</option>
-      {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
-    </select>
-    </>
+      {open && (
+        <ul className="m-0 mt-1 flex max-h-[30dvh] list-none flex-col gap-1 overflow-y-auto p-0">
+          {bots.map((b) => (
+            <li key={b.name}>
+              <span className="text-label">{b.name}: </span>
+              {b.clue.length ? b.clue.join(" ") : <span className="text-bevel">no clue this phase</span>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </aside>
   );
 }
