@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { SubmitData } from "@shared/events";
 import { PhysicalPuzzle, type ScanMode } from "../../../ar/PhysicalPuzzle";
-import { releaseCocoSsdDetector } from "../../../ar/detect/cocoSsdDetector";
+import { loadPreferredDetector, releaseDetectors } from "../../../ar/detect/selectDetector";
 import type { PhysicalPuzzleResult } from "../../../ar/types";
 import { powerPercent } from "../game/content";
 import { toPuzzle1Submission } from "../game/evidence";
@@ -16,6 +16,9 @@ import { useSecondsUntil } from "../ui/time";
  * ar/PhysicalPuzzle). Its local verdict is never trusted: the evidence goes to the server,
  * which re-derives the order from marker positions and checks the hold time.
  */
+// COCO-SSD by default; ?detector=mediapipe or ?detector=auto selects MediaPipe (see selectDetector).
+const loadDetector = () => loadPreferredDetector();
+
 export function Puzzle1() {
   const { room, clue, send, lastSubmit } = useGame();
   const [mode, setMode] = useState<ScanMode>("ai");
@@ -24,7 +27,7 @@ export function Puzzle1() {
   const retry = useSecondsUntil(lastSubmit?.puzzle === 1 ? lastSubmit.retryAt : null);
 
   // Free the detector's GPU memory once the puzzle is behind us.
-  useEffect(() => () => releaseCocoSsdDetector(), []);
+  useEffect(() => () => releaseDetectors(), []);
 
   const onResult = useCallback(
     async (result: PhysicalPuzzleResult) => {
@@ -56,7 +59,7 @@ export function Puzzle1() {
       {retry > 0 ? (
         <p className="m-0 bg-inset p-4 text-center text-emergency bevel-sunken">Breaker resetting… {retry}s</p>
       ) : (
-        <PhysicalPuzzle key={armed} initialMode={mode} onModeChange={setMode} onResult={onResult} serverJudged />
+        <PhysicalPuzzle key={armed} initialMode={mode} onModeChange={setMode} onResult={onResult} loadDetector={loadDetector} serverJudged />
       )}
 
       <PowerBar value={powerPercent(room.systems)} />

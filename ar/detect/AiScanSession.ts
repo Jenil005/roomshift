@@ -211,6 +211,7 @@ export class AiScanSession {
       frameWidth,
       frameHeight,
       this.detector.classMap,
+      this.detector.thresholds,
     );
     const frame: AiFrame = {
       sightings: mergeHybrid(sightings, markers, this.qrIds),

@@ -10,9 +10,14 @@ import { fileURLToPath } from "node:url";
 const at = (p) => fileURLToPath(new URL(`../${p}`, import.meta.url));
 const sha = async (p) => createHash("sha256").update(await readFile(at(p))).digest("hex");
 
-for (const dir of ["public/models", "public/markers", "public/external"]) await rm(at(dir), { recursive: true, force: true });
+for (const dir of ["public/models", "public/markers", "public/external", "public/mediapipe"]) await rm(at(dir), { recursive: true, force: true });
 await cp(at("../ar/public/models"), at("public/models"), { recursive: true });
 await cp(at("../ar/public/markers"), at("public/markers"), { recursive: true });
+// MediaPipe Tasks Vision runtime (classic loader, SIMD and no-SIMD builds; the resolver picks one).
+await mkdir(at("public/mediapipe/wasm"), { recursive: true });
+for (const f of ["vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"]) {
+  await copyFile(at(`node_modules/@mediapipe/tasks-vision/wasm/${f}`), at(`public/mediapipe/wasm/${f}`));
+}
 
 const engine = "node_modules/@8thwall/engine-binary";
 await mkdir(at("public/external"), { recursive: true });
@@ -31,6 +36,8 @@ const manifest = {
   sha256: {},
 };
 for (const name of ["xr.js", "xr-slam.js", "LICENSE"]) manifest.sha256[`external/xr/${name}`] = await sha(`public/external/xr/${name}`);
+manifest.mediapipe = JSON.parse(await readFile(at("node_modules/@mediapipe/tasks-vision/package.json"), "utf8")).version;
+manifest.sha256["models/mediapipe/efficientdet_lite0_fp16.tflite"] = await sha("public/models/mediapipe/efficientdet_lite0_fp16.tflite");
 manifest.sha256["models/coco-ssd/ssdlite_mobilenet_v2/model.json"] = await sha("public/models/coco-ssd/ssdlite_mobilenet_v2/model.json");
 await writeFile(at("public/external/runtime-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
 console.log(`Prepared models, markers and XR Engine ${manifest.engine} (unmodified) in public/.`);

@@ -256,7 +256,7 @@ export function AiScanner({
             </h3>
             <p>
               {model.status === "loading"
-                ? "Loading the object model onto this phone (about 18 MB, first time only)."
+                ? "Loading the object model onto this phone (7 to 18 MB, first time only)."
                 : model.status === "slow"
                   ? "The model is taking longer than expected. Keep waiting, or switch to QR Backup now."
                   : model.status === "failed"
@@ -290,7 +290,7 @@ export function AiScanner({
         )}
         {live && (
           <div className="camera-caption">
-            <span>AI · ON-DEVICE</span>
+            <span>AI · {model.detector?.name.startsWith("MediaPipe") ? "MEDIAPIPE" : "COCO-SSD"} · ON-DEVICE</span>
             <span>{inferenceMs > 0 ? `${Math.round(inferenceMs)} MS` : "REAR CAMERA"}</span>
           </div>
         )}
