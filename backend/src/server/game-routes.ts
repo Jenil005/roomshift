@@ -59,6 +59,8 @@ const requestSchema = z.discriminatedUnion('type', [
   }),
   z.object({ type: z.literal('puzzle2:draft'), order: z.array(z.string().max(32)).max(8), ...authed }),
   z.object({ type: z.literal('final:press'), held: z.boolean(), ...authed }),
+  z.object({ type: z.literal('final:force'), ...authed }),
+  z.object({ type: z.literal('game:reset'), ...authed }),
 ])
 
 const fail = (code: GameErrorCode, message: string): GameResult => ({ ok: false, code, message })
@@ -127,10 +129,28 @@ export function registerGameRoutes(app: Hono<AppContext>): void {
     }
 
     const tokenHash = await hashToken(req.playerToken)
-    const command: EngineCommand =
-      req.type === 'room:ready' ? { type: req.type, tokenHash, ready: req.ready } : { type: req.type, tokenHash }
-    return reply(c, await send(c.env, code, command))
+    return reply(c, await send(c.env, code, toCommand(req, tokenHash)))
   })
+}
+
+type AuthedRequest = Exclude<z.infer<typeof requestSchema>, { type: 'room:create' | 'room:join' }>
+
+/** Copies only the validated payload fields; nothing else from the body reaches the room. */
+function toCommand(req: AuthedRequest, tokenHash: string): EngineCommand {
+  switch (req.type) {
+    case 'room:ready':
+      return { type: req.type, tokenHash, ready: req.ready }
+    case 'puzzle:submit': {
+      const { puzzle, scanned, manualCode, order } = req.submission
+      return { type: req.type, tokenHash, puzzle, scanned, manualCode, order }
+    }
+    case 'puzzle2:draft':
+      return { type: req.type, tokenHash, order: req.order }
+    case 'final:press':
+      return { type: req.type, tokenHash, held: req.held }
+    default:
+      return { type: req.type, tokenHash }
+  }
 }
 
 function withToken(result: GameResult, playerToken: string): GameResult {

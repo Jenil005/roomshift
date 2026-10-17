@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import {
   DISCONNECT_AFTER_MS,
+  FINAL_FORCE_AFTER_MS,
+  FINAL_SYNC_WINDOW_MS,
   INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
+  PHASE_COMPLETE_HOLD_MS,
   ROOM_IDLE_TTL_MS,
 } from '@shared/constants'
-import type { MeData } from '@shared/events'
+import type { MeData, SubmitData } from '@shared/events'
+import { MODULES } from '@shared/puzzles/commsBoot'
 import { nextDeadline, reduce, toView, type EngineCommand, type GameState } from './engine'
 import { PUZZLE1_SOLUTION } from './puzzle1'
 
@@ -245,5 +249,251 @@ describe('events and versions', () => {
       'INTRO',
     ])
     expect(version).toBeGreaterThan(0)
+  })
+})
+
+// ---- Phase 3: puzzles, final sequence, reset ----
+
+function atPuzzle1() {
+  const g = startedGame()
+  g.run({ type: 'intro:skip', tokenHash: 'h0' })
+  expect(g.state!.phase).toBe('PUZZLE_1')
+  return g
+}
+
+const submit1 = (g: ReturnType<typeof game>, extra: { scanned?: string[]; manualCode?: string }, tokenHash = 'h1') =>
+  g.run({ type: 'puzzle:submit', tokenHash, puzzle: 1, ...extra })
+
+function atPuzzle2() {
+  const g = atPuzzle1()
+  submit1(g, { scanned: ['book', 'cup', 'keys'] })
+  g.advance(PHASE_COMPLETE_HOLD_MS)
+  g.run({ type: 'tick' })
+  expect(g.state!.phase).toBe('PUZZLE_2')
+  return g
+}
+
+const submit2 = (g: ReturnType<typeof game>, order: string[], tokenHash = 'h0') =>
+  g.run({ type: 'puzzle:submit', tokenHash, puzzle: 2, order })
+
+const wrongOrder = (solution: readonly string[]) => [...solution].reverse()
+
+function atFinal() {
+  const g = atPuzzle2()
+  submit2(g, g.state!.puzzle2!.solution)
+  g.advance(PHASE_COMPLETE_HOLD_MS)
+  g.run({ type: 'tick' })
+  expect(g.state!.phase).toBe('FINAL_SEQUENCE')
+  return g
+}
+
+describe('puzzle 1 (physical order)', () => {
+  it('only accepts submissions during PUZZLE_1', () => {
+    const g = startedGame()
+    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+  })
+
+  it('rejects malformed scans without counting an attempt', () => {
+    const g = atPuzzle1()
+    expect(submit1(g, { scanned: ['book', 'phone', 'keys'] }).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(submit1(g, { scanned: ['book', 'book', 'keys'] }).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(submit1(g, {}).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(g.state!.puzzles[1].attempts).toBe(0)
+  })
+
+  it('counts wrong and partial orders as failed attempts and records the event', () => {
+    const g = atPuzzle1()
+    const wrong = submit1(g, { scanned: ['cup', 'book', 'keys'] }).result
+    expect(wrong).toMatchObject({ ok: true, data: { solved: false, reason: 'Wrong order' } })
+    const partial = submit1(g, { scanned: ['book', 'cup'] }).result
+    expect(partial).toMatchObject({ ok: true, data: { solved: false, reason: 'Not all objects detected' } })
+    expect(submit1(g, { manualCode: 'XYZ' }).result).toMatchObject({ ok: true, data: { solved: false } })
+    expect(g.state!.puzzles[1]).toMatchObject({ attempts: 3, solved: false })
+    expect(g.state!.phase).toBe('PUZZLE_1')
+    expect(g.state!.events.at(-1)).toMatchObject({ type: 'puzzle:failed', puzzle: 1 })
+  })
+
+  it('a correct scan sets the breaker online, completes, then auto-advances', () => {
+    const g = atPuzzle1()
+    const res = submit1(g, { scanned: ['book', 'cup', 'keys'] }).result
+    expect(res).toMatchObject({ ok: true, data: { solved: true } })
+    expect(g.state!.phase).toBe('PUZZLE_1_COMPLETE')
+    expect(g.state!.systems.breaker).toBe(true)
+    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(nextDeadline(g.state)).toBe(g.state!.phaseStartedAt + PHASE_COMPLETE_HOLD_MS)
+  })
+
+  it('accepts the manual fallback code', () => {
+    const g = atPuzzle1()
+    expect(submit1(g, { manualCode: 'b-c-k' }).result).toMatchObject({ ok: true, data: { solved: true } })
+  })
+})
+
+describe('puzzle 2 (comms boot)', () => {
+  it('deals private comms clues, keeps the solution off the public view', () => {
+    const g = atPuzzle2()
+    const view = toView(g.state!)
+    expect(view.puzzle2).toEqual({ draft: [], hints: [] })
+    const me = g.run({ type: 'room:me', tokenHash: 'h0' }).result
+    if (!me.ok) throw new Error('room:me failed')
+    const lines = (me.data as MeData).clue!.clues
+    expect(lines.length).toBeGreaterThan(0)
+    expect(lines.every((l) => /AUTH|NETWORK|DATABASE|UPLINK/.test(l))).toBe(true)
+    const json = JSON.stringify(view)
+    for (const line of lines) expect(json).not.toContain(line)
+    expect(json).not.toContain(String(g.state!.puzzle2!.seed))
+    expect(json).not.toContain(g.state!.puzzle2!.solution.join('","'))
+  })
+
+  it('shares a validated draft', () => {
+    const g = atPuzzle2()
+    g.run({ type: 'puzzle2:draft', tokenHash: 'h1', order: ['uplink', 'bogus', 'auth', 'uplink', 'network', 'database'] })
+    expect(toView(g.state!).puzzle2!.draft).toEqual(['uplink', 'auth', 'network', 'database'])
+    const early = atPuzzle1()
+    expect(early.run({ type: 'puzzle2:draft', tokenHash: 'h1', order: ['auth'] }).result).toMatchObject({
+      ok: false,
+      code: 'wrong_phase',
+    })
+  })
+
+  it('applies 3s / 6s / 10s cooldowns and releases hints after 3 and 6 wrong tries', () => {
+    const g = atPuzzle2()
+    const wrong = wrongOrder(g.state!.puzzle2!.solution)
+    const expectedCooldowns = [3000, 6000, 10000, 10000, 10000, 10000]
+    expectedCooldowns.forEach((cooldown, i) => {
+      const res = submit2(g, wrong).result
+      expect(res).toMatchObject({ ok: true, data: { solved: false, reason: 'Sequence rejected', retryAfterMs: cooldown } })
+      // Submitting again inside the cooldown is refused and not counted.
+      g.advance(cooldown - 1)
+      expect(submit2(g, wrong).result).toMatchObject({ ok: false, code: 'cooldown', retryAfterMs: 1 })
+      g.advance(1)
+      expect(g.state!.puzzles[2].attempts).toBe(i + 1)
+      expect(toView(g.state!).puzzle2!.hints).toHaveLength(i + 1 >= 6 ? 2 : i + 1 >= 3 ? 1 : 0)
+    })
+    const hintEvents = g.state!.events.filter((e) => e.type === 'puzzle2:hint')
+    expect(hintEvents.map((e) => (e as { text: string }).text)).toEqual([
+      expect.stringMatching(/boots first\.$/),
+      expect.stringMatching(/boots last\.$/),
+    ])
+  })
+
+  it('rejects invalid orders without counting them', () => {
+    const g = atPuzzle2()
+    expect(submit2(g, ['auth', 'auth', 'network', 'uplink']).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(submit2(g, [...MODULES].slice(0, 3)).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(g.state!.puzzles[2].attempts).toBe(0)
+  })
+
+  it('the exact solution sets the terminal online and leads to FINAL_SEQUENCE', () => {
+    const g = atPuzzle2()
+    expect(submit2(g, g.state!.puzzle2!.solution).result).toMatchObject({ ok: true, data: { solved: true } })
+    expect(g.state!.phase).toBe('PUZZLE_2_COMPLETE')
+    expect(g.state!.systems).toMatchObject({ breaker: true, terminal: true, door: false })
+    g.advance(PHASE_COMPLETE_HOLD_MS)
+    g.run({ type: 'tick' })
+    expect(g.state!.phase).toBe('FINAL_SEQUENCE')
+    expect(toView(g.state!).final).toEqual({ holding: [], forceAvailableAt: g.state!.phaseStartedAt + FINAL_FORCE_AFTER_MS })
+  })
+
+  it('a reconnecting player gets the same clues back', () => {
+    const g = atPuzzle2()
+    const first = g.run({ type: 'room:me', tokenHash: 'h1' }).result
+    g.run({ type: 'room:join', playerId: 'x', playerName: 'Bea', tokenHash: 'new', rejoinTokenHash: 'h1' })
+    const again = g.run({ type: 'room:me', tokenHash: 'h1' }).result
+    expect(again).toEqual(first)
+  })
+})
+
+describe('final sequence', () => {
+  it('needs every connected player holding at once', () => {
+    const g = atFinal()
+    g.run({ type: 'final:press', tokenHash: 'h0', held: true })
+    expect(g.state!.phase).toBe('FINAL_SEQUENCE')
+    expect(toView(g.state!).final!.holding).toEqual(['p0'])
+    g.run({ type: 'final:press', tokenHash: 'h1', held: true })
+    expect(g.state!.phase).toBe('COMPLETE')
+    expect(g.state!.systems.door).toBe(true)
+    expect(g.state!.events.map((e) => e.type)).toContain('game:complete')
+    expect(g.run({ type: 'final:press', tokenHash: 'h0', held: true }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+  })
+
+  it('tolerates a release inside the sync window, not outside it', () => {
+    const inside = atFinal()
+    inside.run({ type: 'final:press', tokenHash: 'h0', held: true })
+    inside.run({ type: 'final:press', tokenHash: 'h0', held: false })
+    inside.advance(FINAL_SYNC_WINDOW_MS)
+    inside.run({ type: 'final:press', tokenHash: 'h1', held: true })
+    expect(inside.state!.phase).toBe('COMPLETE')
+
+    const outside = atFinal()
+    outside.run({ type: 'final:press', tokenHash: 'h0', held: true })
+    outside.run({ type: 'final:press', tokenHash: 'h0', held: false })
+    outside.advance(FINAL_SYNC_WINDOW_MS + 1)
+    outside.run({ type: 'final:press', tokenHash: 'h1', held: true })
+    expect(outside.state!.phase).toBe('FINAL_SEQUENCE')
+  })
+
+  it('a disconnected player stops counting, so the others can still win', () => {
+    const g = atFinal()
+    g.advance(DISCONNECT_AFTER_MS - 1)
+    g.run({ type: 'final:press', tokenHash: 'h0', held: true })
+    g.advance(2)
+    g.run({ type: 'tick' }) // p1 has been silent too long and drops out
+    expect(g.state!.players[1].connected).toBe(false)
+    expect(g.state!.phase).toBe('COMPLETE')
+  })
+
+  it('lets only the host force the door, and only after the wait', () => {
+    const g = atFinal()
+    expect(g.run({ type: 'final:force', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'not_host' })
+    const early = g.run({ type: 'final:force', tokenHash: 'h0' }).result
+    expect(early).toMatchObject({ ok: false, code: 'cooldown', retryAfterMs: FINAL_FORCE_AFTER_MS })
+    g.advance(FINAL_FORCE_AFTER_MS)
+    expect(g.run({ type: 'final:force', tokenHash: 'h0' }).result.ok).toBe(true)
+    expect(g.state!.phase).toBe('COMPLETE')
+  })
+})
+
+describe('reset and full digital playthrough', () => {
+  it('plays LOBBY to COMPLETE, resets, and can play again', () => {
+    const g = atFinal()
+    g.run({ type: 'final:press', tokenHash: 'h0', held: true })
+    g.run({ type: 'final:press', tokenHash: 'h1', held: true })
+    expect(g.state!.phase).toBe('COMPLETE')
+    const phases = g.state!.events.filter((e) => e.type === 'game:advance').map((e) => (e as { to: string }).to)
+    expect(phases).toEqual([
+      'READY', 'INTRO', 'PUZZLE_1', 'PUZZLE_1_COMPLETE', 'PUZZLE_2', 'PUZZLE_2_COMPLETE', 'FINAL_SEQUENCE', 'COMPLETE',
+    ])
+
+    expect(g.run({ type: 'game:reset', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'not_host' })
+    expect(g.run({ type: 'game:reset', tokenHash: 'h0' }).result.ok).toBe(true)
+    const view = toView(g.state!)
+    expect(view.phase).toBe('LOBBY')
+    expect(view.systems).toEqual({ breaker: false, terminal: false, door: false })
+    expect(view.players.every((p) => !p.isReady && !p.role)).toBe(true)
+    expect(view.puzzle2).toBeUndefined()
+    expect((g.run({ type: 'room:me', tokenHash: 'h1' }).result as { data: MeData }).data.clue).toBeNull()
+
+    g.run({ type: 'room:ready', tokenHash: 'h0', ready: true })
+    g.run({ type: 'room:ready', tokenHash: 'h1', ready: true })
+    expect(g.run({ type: 'game:start', tokenHash: 'h0' }).result.ok).toBe(true)
+  })
+
+  it('puzzle 2 works for 3 and 4 players', () => {
+    for (const extra of [['Cy'], ['Cy', 'Di']]) {
+      const g = game()
+      g.create()
+      g.join('Bea')
+      extra.forEach((n) => g.join(n))
+      g.state!.players.forEach((p) => g.run({ type: 'room:ready', tokenHash: p.tokenHash, ready: true }))
+      g.run({ type: 'game:start', tokenHash: 'h0' })
+      g.run({ type: 'intro:skip', tokenHash: 'h0' })
+      submit1(g, { scanned: ['book', 'cup', 'keys'] })
+      g.advance(PHASE_COMPLETE_HOLD_MS)
+      g.run({ type: 'tick' })
+      expect(Object.values(g.state!.clues).every((c) => c.length >= 1)).toBe(true)
+      const res = submit2(g, g.state!.puzzle2!.solution).result as { data: SubmitData }
+      expect(res.data.solved).toBe(true)
+    }
   })
 })

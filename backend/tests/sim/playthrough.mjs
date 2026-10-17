@@ -5,7 +5,8 @@
  *   node tests/sim/playthrough.mjs                      # http://localhost:5173
  *   node tests/sim/playthrough.mjs https://roomshift.app.space
  *
- * Plays the Phase 2 loop with simulated players over POST /api/game, and watches the
+ * Plays a full digital game (LOBBY -> COMPLETE -> reset) plus failure paths with simulated
+ * players over POST /api/game, and watches the
  * public `rs_rooms` record through an ANONYMOUS DeepSpace socket (what a judge's phone
  * sees) to prove the server's state reaches clients live. Exits 1 on any failure.
  */
@@ -65,6 +66,21 @@ function watchRoom(code) {
     ws.addEventListener('error', () => reject(new Error(`WebSocket failed: ${wsUrl}`)))
   })
   return watcher
+}
+
+// Parses the clue sentences from shared/puzzles/commsBoot.ts describe() and returns
+// every module order consistent with all of them (what players work out by talking).
+function solveFromClues(lines) {
+  const id = (label) => label.toLowerCase()
+  const tests = lines.map((line) => {
+    let m
+    if ((m = line.match(/^(\w+) must come online before (\w+)\.$/))) return (o) => o.indexOf(id(m[1])) < o.indexOf(id(m[2]))
+    if ((m = line.match(/^(\w+) cannot be the first module to boot\.$/))) return (o) => o[0] !== id(m[1])
+    if ((m = line.match(/^(\w+) is never the last module to boot\.$/))) return (o) => o[3] !== id(m[1])
+    throw new Error(`Unrecognized clue: ${line}`)
+  })
+  const perms = (rest) => (rest.length ? rest.flatMap((m, i) => perms([...rest.slice(0, i), ...rest.slice(i + 1)]).map((p) => [m, ...p])) : [[]])
+  return perms(['auth', 'network', 'database', 'uplink']).filter((o) => tests.every((t) => t(o)))
 }
 
 async function waitFor(fn, label, ms = 5000) {
@@ -136,7 +152,54 @@ async function main() {
   await sleep(Math.max(0, INTRO_MS - (Date.now() - startedAt)))
   await waitFor(() => live.latest?.phase === 'PUZZLE_1', 'server alarm advances INTRO -> PUZZLE_1 with no client requests', 6000)
   check(live.latest?.phase === 'PUZZLE_1', 'live view shows PUZZLE_1')
-  check((await api({ type: 'puzzle:submit', code, playerToken: tokA, submission: { puzzle: 1, scanned: ['book', 'cup', 'keys'] } })).code === 'not_implemented', 'puzzle:submit reserved for next phase')
+
+  // --- puzzle 1: physical order (fake AR submissions) ---
+  const p1 = (submission) => api({ type: 'puzzle:submit', code, playerToken: tokB, submission: { puzzle: 1, ...submission } })
+  check((await p1({ scanned: ['book', 'phone', 'keys'] })).code === 'bad_request', 'unknown object id -> bad_request')
+  const wrong1 = await p1({ scanned: ['keys', 'cup', 'book'] })
+  check(wrong1.ok && wrong1.data.solved === false && wrong1.data.reason === 'Wrong order', 'wrong scan order -> solved:false', wrong1)
+  const ok1 = await p1({ scanned: ['book', 'cup', 'keys'], solved: true })
+  check(ok1.ok && ok1.data.solved && ok1.data.room.systems.breaker, 'correct scan -> breaker online', ok1)
+  check((await p1({ scanned: ['book', 'cup', 'keys'] })).code === 'wrong_phase', 'duplicate puzzle 1 submit -> wrong_phase')
+  await waitFor(() => live.latest?.phase === 'PUZZLE_2', 'server auto-advances to PUZZLE_2', 8000)
+  check(live.latest?.phase === 'PUZZLE_2', 'live view shows PUZZLE_2')
+
+  // --- puzzle 2: players pool their private clues and deduce the order ---
+  const clues = []
+  for (const t of [tokA, tokB]) clues.push(...(await api({ type: 'room:me', code, playerToken: t })).data.clue.clues)
+  check(clues.length === 5, 'puzzle 2 deals 5 clues across the team', clues)
+  const p2Json = JSON.stringify(live.latest)
+  check(!clues.some((c) => p2Json.includes(c)), 'public view contains no puzzle 2 clue')
+  const solution = solveFromClues(clues)
+  check(solution.length === 1, 'pooled clues leave exactly one boot order', solution)
+
+  await api({ type: 'puzzle2:draft', code, playerToken: tokA, order: ['auth', 'nope', 'auth'] })
+  await waitFor(() => JSON.stringify(live.latest?.puzzle2?.draft) === '["auth"]', 'shared draft syncs live (validated)')
+  const p2 = (order, t = tokA) => api({ type: 'puzzle:submit', code, playerToken: t, submission: { puzzle: 2, order } })
+  const wrong2 = await p2([...solution[0]].reverse())
+  check(wrong2.ok && wrong2.data.solved === false && wrong2.data.retryAfterMs === 3000, 'wrong boot order -> 3 s cooldown', wrong2)
+  const cool = await p2(solution[0], tokB)
+  check(cool.code === 'cooldown' && cool.retryAfterMs > 0 && cool.status === 429, 'submit during cooldown -> 429 cooldown', cool)
+  await sleep(3100)
+  const ok2 = await p2(solution[0], tokB)
+  check(ok2.ok && ok2.data.solved && ok2.data.room.systems.terminal, 'correct boot order -> terminal online', ok2)
+  await waitFor(() => live.latest?.phase === 'FINAL_SEQUENCE', 'server auto-advances to FINAL_SEQUENCE', 8000)
+
+  // --- final sequence: everyone holds together ---
+  const press = (t, held) => api({ type: 'final:press', code, playerToken: t, held })
+  check((await api({ type: 'final:force', code, playerToken: tokA })).code === 'cooldown', 'early host force -> cooldown')
+  await press(tokA, true)
+  await waitFor(() => live.latest?.final?.holding?.length === 1, 'live view shows one player holding')
+  check(live.latest?.phase === 'FINAL_SEQUENCE', 'one player holding is not enough')
+  await press(tokB, true)
+  await waitFor(() => live.latest?.phase === 'COMPLETE', 'both holding -> COMPLETE on the live view')
+  check(live.latest?.systems?.door === true && live.latest?.events?.some((e) => e.type === 'game:complete'), 'door online and game:complete recorded', live.latest)
+
+  // --- demo reset ---
+  check((await api({ type: 'game:reset', code, playerToken: tokB })).code === 'not_host', 'non-host reset -> not_host')
+  const reset = await api({ type: 'game:reset', code, playerToken: tokA })
+  check(reset.ok && reset.data.room.phase === 'LOBBY' && !reset.data.room.systems.door, 'host reset -> LOBBY, systems off', reset)
+  await waitFor(() => live.latest?.phase === 'LOBBY', 'live view shows LOBBY after reset')
 
   // --- full room + leave cleanup (second room) ---
   const h = await api({ type: 'room:create', playerName: 'H' })
