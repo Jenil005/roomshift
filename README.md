@@ -4,6 +4,19 @@
 
 RoomShift is a cooperative AR-vision puzzle game where players in the same physical space receive different clues, communicate, and manipulate real-world objects to progress through a shared digital mission.
 
+## Implemented: AR physical puzzle
+
+A runnable React/TypeScript AR prototype in `ar/` now implements the first physical-order puzzle: camera-based QR marker detection, live overlays, stable order verification, printable marker cards, and a clearly labeled manual fallback. It runs locally on one device; multiplayer rooms and later mission phases remain planned.
+
+```sh
+npm ci
+npm run dev
+```
+
+Use Node.js 22.12+ or 24. Select **Marker cards** in the app to print the BOOK, CUP, and KEYS markers. Mobile camera use requires HTTPS. See [AR usage and integration](ar/README.md) for setup, backend integration, and camera troubleshooting.
+
+Validation: `npm test`, `npm run build`, and `npm run test:browser`.
+
 ## MVP: Blackout Protocol
 
 Players must restore power to a locked-down research facility before the timer expires.
@@ -16,7 +29,7 @@ Core loop:
 5. Assemble the final override code.
 6. All players activate the override together to win.
 
-## Planned Stack
+## Stack and planned services
 
 - **Frontend:** React + TypeScript + Vite
 - **Styling:** Tailwind CSS
