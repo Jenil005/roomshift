@@ -12,7 +12,8 @@
     "test:e2e": "playwright test",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "predev": "npm run prepare:assets",
-    "prebuild": "npm run prepare:assets"
+    "prebuild": "npm run prepare:assets",
+    "verify:dist": "node scripts/verify-dist.mjs"
   },
   "dependencies": {
     "@8thwall/engine-binary": "1.0.0",

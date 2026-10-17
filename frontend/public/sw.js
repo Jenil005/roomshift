@@ -1,4 +1,9 @@
-const CACHE_NAME = 'roomshift-shell-v2'
+// Caching rules: the app shell and hashed /assets/* only (entry chunks precached, lazy chunks
+// such as TensorFlow.js and the facility cached on first use). The XR Engine (/external/),
+// the AI model (/models/) and the game API (another origin) are never cached here, so a large
+// ML/SLAM payload is never precached on install and never mixes with a newer deploy.
+// Bump the version whenever these rules change.
+const CACHE_NAME = 'roomshift-shell-v3'
 const APP_SHELL = ['/', '/index.html', '/manifest.webmanifest', '/icons/icon-192.png', '/icons/icon-512.png']
 
 async function precacheBuiltAssets(cache) {
