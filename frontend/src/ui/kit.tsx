@@ -36,16 +36,10 @@ export function ErrorLine({ message }: { message: string | null }) {
 
 /** Mission progress (separate from the LIFE bar, which is time). */
 export function PowerBar({ value }: { value: number }) {
-  const lit = Math.round(value / 10);
   return (
-    <div className="flex items-center gap-2" aria-label={`Power ${value}%`}>
-      <Label>Power</Label>
-      <div className="grid h-[18px] flex-1 grid-cols-10 gap-[3px]">
-        {Array.from({ length: 10 }, (_, i) => (
-          <div key={i} className={i < lit ? "bg-emergency" : "bg-rule"} />
-        ))}
-      </div>
-      <span className="font-display">{value}%</span>
+    <div className="flex items-center justify-between gap-3" aria-label={`Power ${value}%`}>
+      <span className="font-display text-[24px] font-bold text-emergency">POWER</span>
+      <span className="font-numeric text-[30px] font-bold text-emergency">{value}%</span>
     </div>
   );
 }
