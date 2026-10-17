@@ -37,3 +37,7 @@ Microsoft/
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Browser test artifacts
+playwright-report/
+test-results/
