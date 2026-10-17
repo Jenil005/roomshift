@@ -271,10 +271,14 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .facility-legal a { color: var(--color-phosphor); }
 .facility-loading { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; margin: 0; background: #07141c; color: var(--color-phosphor); font-family: var(--font-display); }
 .facility-open {
-  position: fixed; z-index: 30; right: max(10px, env(safe-area-inset-right)); top: max(2.1rem, calc(env(safe-area-inset-top) + 26px));
-  min-height: 40px; padding: 6px 10px; font-family: var(--font-display); font-size: 13px;
+  min-height: 40px; padding: 6px 10px; font-family: var(--font-display); font-size: 13px; white-space: nowrap;
   background: var(--color-bunker); color: var(--color-phosphor); border: 2px solid var(--color-phosphor);
 }
+/* Under the status bar, over non-interactive headings; the panel itself lets taps through. */
+.debug-overlay { position: fixed; z-index: 70; left: max(6px, env(safe-area-inset-left)); top: max(48px, calc(env(safe-area-inset-top) + 44px)); max-width: min(92vw, 360px); font: 11px/1.35 ui-monospace, Menlo, monospace; pointer-events: none; }
+.debug-overlay button { pointer-events: auto; }
+.debug-overlay button { min-height: 28px; padding: 2px 6px; background: #000c; color: #7cf29a; border: 1px solid #7cf29a; font: inherit; }
+.debug-overlay pre { margin: 2px 0 0; padding: 6px; background: #000d; color: #d8e8c8; white-space: pre-wrap; }
 @media (max-height: 640px) { .facility-hud { gap: 5px; } .facility-message { font-size: 12px; } .facility-legal { font-size: 9px; } }
 
 /* The AR module's scanner, restyled to the Blackout Protocol identity. */

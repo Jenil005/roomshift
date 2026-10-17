@@ -1,6 +1,7 @@
 import { NARRATION, narrationFor } from "../game/content";
 import { useGame, useMe } from "../game/useGame";
 import { formatClock } from "../ui/time";
+import { FacilityButton } from "../ui/FacilityButton";
 
 export function Complete() {
   const { room, send } = useGame();
@@ -21,6 +22,7 @@ export function Complete() {
           <div className="flex justify-between"><dt>Completion time</dt><dd className="m-0 font-numeric font-bold">{took}</dd></div>
         </dl>
         <p className="m-0 text-center text-[28px] text-panel">{narrationFor(room, NARRATION.complete)}</p>
+        <FacilityButton className="self-center" />
         <div className="flex-1" />
         {me?.isHost ? (
           <button onClick={() => void send({ type: "game:reset" })} className="min-h-16 bg-bunker font-display text-[26px] font-bold text-manual bevel-raised">

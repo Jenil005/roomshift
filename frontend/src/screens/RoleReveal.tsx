@@ -4,6 +4,7 @@ import { useGame, useMe } from "../game/useGame";
 import { Button, Label, Screen } from "../ui/kit";
 import { ServerError } from "../ui/ServerError";
 import { useSecondsUntil } from "../ui/time";
+import { FacilityButton } from "../ui/FacilityButton";
 
 /** INTRO: the server deals roles and puzzle 1 clues, then auto-advances (the host may skip). */
 export function RoleReveal() {
@@ -14,7 +15,10 @@ export function RoleReveal() {
 
   return (
     <Screen>
-      <span className="text-phosphor">Clearance granted</span>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-phosphor">Clearance granted</span>
+        <FacilityButton />
+      </div>
       <p className="m-0 text-soft">{narrationFor(room, NARRATION.intro)}</p>
       {clue ? (
         <>

@@ -2,6 +2,7 @@ import { MAX_PLAYERS, MIN_PLAYERS } from "@shared/constants";
 import { useGame, useMe } from "../game/useGame";
 import { Button, Heading, Label, Screen } from "../ui/kit";
 import { ServerError } from "../ui/ServerError";
+import { JoinQr } from "../ui/JoinQr";
 
 export function Lobby() {
   const { room, selfId, send, pending } = useGame();
@@ -17,9 +18,14 @@ export function Lobby() {
         <Label>Facility 04, sublevel B</Label>
         <Heading className="text-emergency">Room {room.code}</Heading>
       </div>
-      <p className="m-0 bg-panel p-3 bevel-raised">
-        Teammates open <span className="break-all text-emergency">{joinUrl}</span> or enter code <span className="text-emergency">{room.code}</span>.
-      </p>
+      <div className="flex items-center gap-3 bg-panel p-3 bevel-raised">
+        <JoinQr url={joinUrl} />
+        <div className="flex min-w-0 flex-col gap-1">
+          <span>Teammates scan the code, or enter</span>
+          <span className="font-display text-[32px] leading-none tracking-widest text-emergency">{room.code}</span>
+          <span className="break-all text-[12px] text-label">{joinUrl}</span>
+        </div>
+      </div>
 
       <section className="flex flex-col gap-2">
         <h2 className="m-0 font-display text-[20px] font-normal text-label">Operatives {room.players.length} of {MAX_PLAYERS}</h2>

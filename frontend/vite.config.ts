@@ -9,6 +9,8 @@ const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url))
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Build id for the ?debug overlay (Netlify sets COMMIT_REF).
+  define: { __BUILD_SHA__: JSON.stringify((process.env.COMMIT_REF ?? 'local').slice(0, 7)) },
   resolve: {
     // Canonical contracts live in ../shared (also used by the backend). Code imported from
     // ../ar and ../backend must use this package's single copy of React and friends, or hooks

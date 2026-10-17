@@ -147,7 +147,12 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
           </section>
         )}
 
-        {status && <p className="facility-message" role="status" aria-live="polite">{status.message}</p>}
+        {status && (
+          <p className="facility-message" role="status" aria-live="polite">
+            {status.message}
+            {status.engine === "loading" && !ar && " Downloading the AR engine (about 6.5 MB, first time only)…"}
+          </p>
+        )}
 
         <div className="facility-controls">
           {status?.canCalibrate && (
