@@ -41,3 +41,6 @@ test-results/
 # Generated WebAR dependencies (prepared during build)
 ar/public/external/
 ar/public/vendor/
+
+# Local Netlify folder
+.netlify
