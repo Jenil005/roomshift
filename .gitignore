@@ -37,3 +37,10 @@ tmp/
 # Browser test artifacts
 playwright-report/
 test-results/
+
+# Local tooling / runtime state
+.claude/settings.local.json
+Microsoft/
+.dev.vars
+.wrangler/
+.deepspace/

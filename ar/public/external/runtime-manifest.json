@@ -1,0 +1,9 @@
+{
+  "engine": "1.0.0",
+  "three": "0.183.2",
+  "sha256": {
+    "xr.js": "b3973936862f4cb77ae32d24f253d8a0e8b1de4fa2a0cf688833742889ee829d",
+    "xr-slam.js": "398f675c920892afd4521d5196df2b6b8a1b8a90b6a5c749cf5ad1a6e0a85270",
+    "LICENSE": "ed166ff1e5002cd7557f2c595a2398b092e76481070e6bc3b253e51517f3ae61"
+  }
+}
