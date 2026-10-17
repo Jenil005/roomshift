@@ -19,6 +19,12 @@ await mkdir(at("public/external"), { recursive: true });
 await cp(at(`${engine}/dist`), at("public/external/xr"), { recursive: true });
 await copyFile(at(`${engine}/LICENSE`), at("public/external/xr/LICENSE-package"));
 
+// Third-party notices served next to the app (see public/licenses.html).
+await mkdir(at("public/external/licenses"), { recursive: true });
+await copyFile(at("node_modules/three/LICENSE"), at("public/external/licenses/three-LICENSE.txt"));
+await copyFile(at("node_modules/jsqr/LICENSE"), at("public/external/licenses/jsqr-LICENSE.txt"));
+await copyFile(at("src/assets/fonts/after-burner-neue/After Burner Neue - Read Me.txt"), at("public/external/licenses/after-burner-neue-README.txt"));
+
 const manifest = {
   engine: JSON.parse(await readFile(at(`${engine}/package.json`), "utf8")).version,
   three: JSON.parse(await readFile(at("node_modules/three/package.json"), "utf8")).version,

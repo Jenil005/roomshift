@@ -233,3 +233,50 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 .ar-crosshair-target {
   display: none;
 }
+
+/* ---------- Facility (3D preview / world-tracked AR) ---------- */
+.facility-root { position: fixed; inset: 0; z-index: 40; background: #07141c; overflow: hidden; }
+.facility-viewport { position: absolute; inset: 0; touch-action: none; }
+.facility-viewport canvas { position: absolute; inset: 0; width: 100% !important; height: 100% !important; display: block; }
+.facility-ar-canvas[hidden] { display: none; }
+.facility-hud {
+  position: absolute; inset: 0; display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  padding: max(2.4rem, calc(env(safe-area-inset-top) + 30px)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+}
+.facility-hud > * { pointer-events: auto; max-width: 34rem; width: 100%; margin-inline: auto; }
+.facility-hud > .flex-1 { pointer-events: none; }
+/* Dark plates keep text legible over a bright real room. */
+.facility-top, .facility-card, .facility-message { background: rgb(6 17 11 / 0.84); border: 2px solid var(--color-panel); padding: 8px 10px; }
+.facility-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.facility-chip { font-family: var(--font-display); font-size: 11px; padding: 4px 6px; border: 2px solid var(--color-emergency); color: var(--color-emergency); white-space: nowrap; }
+.facility-chip.is-ar { border-color: var(--color-phosphor); color: var(--color-phosphor); }
+.facility-systems { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; font-family: var(--font-display); font-size: 11px; }
+.facility-systems li { flex: 1; text-align: center; padding: 5px 2px; background: rgb(6 17 11 / 0.84); border: 2px solid var(--color-fault); color: #ff9c8f; }
+.facility-systems li.on { border-color: var(--color-phosphor); color: var(--color-phosphor); }
+.facility-message { margin: 0; font-size: 14px; line-height: 1.35; color: var(--color-manual); }
+.facility-card { font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.facility-controls { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.facility-controls button, .facility-calibrate button {
+  min-height: 44px; padding: 8px 12px; font-family: var(--font-display); font-size: 14px;
+  background: rgb(44 74 54 / 0.95); color: var(--color-manual); border: 3px solid; border-color: var(--color-bevel) var(--color-void) var(--color-void) var(--color-bevel);
+}
+.facility-controls button.primary { background: var(--color-emergency); color: var(--color-bunker); border-color: var(--color-emergency-shine) var(--color-emergency-dark) var(--color-emergency-dark) var(--color-emergency-shine); }
+.facility-calibrate { display: flex; gap: 6px; align-items: flex-end; background: rgb(6 17 11 / 0.84); padding: 6px; }
+.facility-calibrate label { display: flex; flex-direction: column; font-size: 12px; color: var(--color-label); }
+.facility-calibrate input { width: 84px; min-height: 40px; font-size: 16px; /* 16px: iOS does not zoom */ background: var(--color-inset); color: var(--color-manual); border: 2px solid var(--color-bevel); padding: 4px 6px; }
+.facility-calibrate input[aria-invalid="true"] { border-color: var(--color-fault); }
+.facility-hold { flex: 1 1 100%; min-height: 88px !important; font-size: 24px !important; touch-action: none; user-select: none; -webkit-user-select: none; background: var(--color-emergency) !important; color: var(--color-bunker) !important; }
+.facility-hold.is-holding { background: var(--color-phosphor) !important; }
+.facility-legal { margin: 0; font-size: 10px; line-height: 1.4; text-align: center; color: #cfe3d6; text-shadow: 0 1px 3px #000; }
+.facility-legal a { color: var(--color-phosphor); }
+.facility-loading { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center; margin: 0; background: #07141c; color: var(--color-phosphor); font-family: var(--font-display); }
+.facility-open {
+  position: fixed; z-index: 30; right: max(10px, env(safe-area-inset-right)); top: max(2.1rem, calc(env(safe-area-inset-top) + 26px));
+  min-height: 40px; padding: 6px 10px; font-family: var(--font-display); font-size: 13px;
+  background: var(--color-bunker); color: var(--color-phosphor); border: 2px solid var(--color-phosphor);
+}
+@media (max-height: 640px) { .facility-hud { gap: 5px; } .facility-message { font-size: 12px; } .facility-legal { font-size: 9px; } }
+
+/* The AR module's scanner, restyled to the Blackout Protocol identity. */
+.scanner-panel { --lime: var(--color-phosphor); --muted: var(--color-label); --line: var(--color-panel); font-family: var(--font-body); background: var(--color-inset); border-radius: 0; border: 3px solid; border-color: var(--color-void) var(--color-bevel) var(--color-bevel) var(--color-void); }
+.scanner-panel .button.primary { border-radius: 0; font-family: var(--font-display); }

@@ -6,7 +6,7 @@ import type { PhysicalPuzzleResult } from "../../../ar/types";
 import { powerPercent } from "../game/content";
 import { toPuzzle1Submission } from "../game/evidence";
 import { useGame } from "../game/useGame";
-import { Button, PowerBar, Screen } from "../ui/kit";
+import { PowerBar, Screen } from "../ui/kit";
 import { MissionHeader } from "../ui/MissionHeader";
 import { ServerError } from "../ui/ServerError";
 import { useSecondsUntil } from "../ui/time";
@@ -16,7 +16,7 @@ import { useSecondsUntil } from "../ui/time";
  * ar/PhysicalPuzzle). Its local verdict is never trusted: the evidence goes to the server,
  * which re-derives the order from marker positions and checks the hold time.
  */
-export function Puzzle1({ onOpenFacility }: { onOpenFacility?: () => void }) {
+export function Puzzle1() {
   const { room, clue, send, lastSubmit } = useGame();
   const [mode, setMode] = useState<ScanMode>("ai");
   const [armed, setArmed] = useState(0); // remounting the scanner re-arms it after a rejection
@@ -60,7 +60,6 @@ export function Puzzle1({ onOpenFacility }: { onOpenFacility?: () => void }) {
       )}
 
       <PowerBar value={powerPercent(room.systems)} />
-      {onOpenFacility && <Button variant="ghost" onClick={onOpenFacility}>Open the facility (AR)</Button>}
     </Screen>
   );
 }

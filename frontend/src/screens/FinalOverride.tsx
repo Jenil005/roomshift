@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
 import { FINAL_SYNC_WINDOW_MS } from "@shared/constants";
 import { powerPercent } from "../game/content";
 import { useGame, useMe } from "../game/useGame";
 import { Button, Label, PowerBar, Screen } from "../ui/kit";
 import { MissionHeader } from "../ui/MissionHeader";
 import { ServerError } from "../ui/ServerError";
+import { useFinalHold } from "../ui/useFinalHold";
 import { useSecondsUntil } from "../ui/time";
 
 /**
@@ -15,38 +15,8 @@ import { useSecondsUntil } from "../ui/time";
 export function FinalOverride() {
   const { room, selfId, send, serverTimeOffset } = useGame();
   const me = useMe();
-  const [holding, setHolding] = useState(false);
-  const heldRef = useRef(false);
-  const phaseRef = useRef(room?.phase);
-  useEffect(() => {
-    phaseRef.current = room?.phase;
-  });
+  const { holding, handlers } = useFinalHold();
   const forceIn = useSecondsUntil(room?.final ? room.final.forceAvailableAt - serverTimeOffset : null);
-
-  const setHold = (held: boolean) => {
-    if (held === heldRef.current) return;
-    heldRef.current = held;
-    setHolding(held);
-    void send({ type: "final:press", held });
-  };
-
-  // Never leave a hold registered after the screen goes away or the phone locks.
-  useEffect(() => {
-    const release = () => {
-      if (!heldRef.current) return;
-      heldRef.current = false;
-      setHolding(false);
-      // After the door opened there is nothing to release (the server ended the sequence).
-      if (phaseRef.current === "FINAL_SEQUENCE") void send({ type: "final:press", held: false });
-    };
-    const onHide = () => document.hidden && release();
-    document.addEventListener("visibilitychange", onHide);
-    return () => {
-      document.removeEventListener("visibilitychange", onHide);
-      release();
-    };
-  }, [send]);
-
   if (!room) return null;
   const onPanel = new Set(room.final?.holding ?? []);
   const connected = room.players.filter((p) => p.connected);
@@ -82,11 +52,7 @@ export function FinalOverride() {
       )}
       <button
         type="button"
-        onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); setHold(true); }}
-        onPointerUp={() => setHold(false)}
-        onPointerCancel={() => setHold(false)}
-        onLostPointerCapture={() => setHold(false)}
-        onContextMenu={(e) => e.preventDefault()}
+        {...handlers}
         aria-pressed={holding}
         className={`hold-action h-40 select-none touch-none font-display text-[34px] font-bold leading-none bevel-amber ${holding ? "translate-y-1 bg-phosphor text-bunker" : "bg-emergency text-bunker"}`}
       >

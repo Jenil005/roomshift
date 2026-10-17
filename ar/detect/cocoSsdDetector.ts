@@ -45,6 +45,9 @@ async function load(modelUrl: string): Promise<Loaded> {
     import("@tensorflow/tfjs-core"),
     import("@tensorflow-models/coco-ssd"),
     import("@tensorflow/tfjs-backend-webgl"), // registers the "webgl" backend
+    // coco-ssd switches to "cpu" for its box post-processing on every frame (without awaiting);
+    // without this backend registered each inference raised an unhandled rejection.
+    import("@tensorflow/tfjs-backend-cpu"),
   ]);
   let backendReady = false;
   try {

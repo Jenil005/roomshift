@@ -1,10 +1,11 @@
-import { MODULES, MODULE_LABEL, type ModuleId } from "@shared/puzzles/commsBoot";
+import { MODULES, MODULE_LABEL } from "@shared/puzzles/commsBoot";
 import { MODULE_HINT, powerPercent } from "../game/content";
 import { useGame } from "../game/useGame";
 import { Button, Label, PowerBar, Screen } from "../ui/kit";
 import { MissionHeader } from "../ui/MissionHeader";
 import { ServerError } from "../ui/ServerError";
 import { useSecondsUntil } from "../ui/time";
+import { useBootDraft } from "../ui/useBootDraft";
 
 /**
  * Comms Boot Sequence (docs/PUZZLE_2_SPEC.md). The boot order is one shared draft on the
@@ -12,20 +13,13 @@ import { useSecondsUntil } from "../ui/time";
  * Each player holds private constraints; the server judges the submitted order.
  */
 export function Puzzle2() {
-  const { room, clue, send, pending, lastSubmit, serverTimeOffset, refresh } = useGame();
+  const { room, clue, send, lastSubmit, serverTimeOffset } = useGame();
+  const { draft, toggle, clear, busy } = useBootDraft();
   const progress = room?.puzzles[2];
   const cooldown = useSecondsUntil(progress?.retryAt ? progress.retryAt - serverTimeOffset : null);
   if (!room) return null;
-  const draft = (room.puzzle2?.draft ?? []) as ModuleId[];
   const hints = room.puzzle2?.hints ?? [];
-  const busy = pending === "puzzle2:draft" || pending === "puzzle:submit";
 
-  // puzzle2:draft replaces the whole shared order, so edit from the latest server copy:
-  // another phone may have changed it since our last poll.
-  const toggle = async (m: ModuleId) => {
-    const latest = ((await refresh())?.puzzle2?.draft ?? draft) as ModuleId[];
-    await send({ type: "puzzle2:draft", order: latest.includes(m) ? latest.filter((x) => x !== m) : [...latest, m] });
-  };
   const submit = () =>
     void send({ type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 2, order: draft } });
   const rejected = lastSubmit?.puzzle === 2 && !lastSubmit.solved;
@@ -80,7 +74,7 @@ export function Puzzle2() {
       <div className="flex-1" />
       <PowerBar value={powerPercent(room.systems)} />
       <div className="flex gap-2">
-        <Button variant="ghost" disabled={busy || draft.length === 0} onClick={() => void send({ type: "puzzle2:draft", order: [] })}>Clear</Button>
+        <Button variant="ghost" disabled={busy || draft.length === 0} onClick={clear}>Clear</Button>
         <Button className="flex-1" disabled={busy || draft.length !== MODULES.length || cooldown > 0} onClick={submit}>
           {cooldown > 0 ? `Rebooting ${cooldown}s` : "Boot terminal"}
         </Button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useGame } from "./game/useGame";
 import { Home } from "./screens/Home";
 import { Lobby } from "./screens/Lobby";
@@ -11,6 +11,9 @@ import { Complete } from "./screens/Complete";
 import { Failed } from "./screens/Failed";
 import { DevPanel } from "./dev/DevPanel";
 import type { ConnectionStatus } from "./game/GameClient";
+
+// Three.js and the facility load only when a player opens it.
+const FacilityView = lazy(() => import("./facility/FacilityView"));
 
 /** The server's phase decides the screen. Clients never advance the game themselves. */
 function Router() {
@@ -38,10 +41,27 @@ function Router() {
 }
 
 export default function App() {
+  const { room } = useGame();
+  const [facilityOpen, setFacilityOpen] = useState(false);
+  const inMission = !!room && room.phase !== "LOBBY" && room.phase !== "READY";
+  const showFacility = facilityOpen && inMission;
+
   return (
     <>
       <PwaStatus />
-      <Router />
+      {/* The facility and the mission screens never mount together: one camera owner at a time. */}
+      {showFacility ? (
+        <Suspense fallback={<p className="facility-loading" role="status">Loading the facility…</p>}>
+          <FacilityView onClose={() => setFacilityOpen(false)} onScan={() => setFacilityOpen(false)} />
+        </Suspense>
+      ) : (
+        <Router />
+      )}
+      {inMission && !showFacility && (
+        <button type="button" className="facility-open" onClick={() => setFacilityOpen(true)}>
+          FACILITY · AR
+        </button>
+      )}
       <div className="scanlines" aria-hidden />
       <DevPanel />
     </>
