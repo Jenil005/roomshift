@@ -12,7 +12,7 @@ import { useSecondsUntil } from "../ui/time";
  * Each player holds private constraints; the server judges the submitted order.
  */
 export function Puzzle2() {
-  const { room, clue, send, pending, lastSubmit, serverTimeOffset } = useGame();
+  const { room, clue, send, pending, lastSubmit, serverTimeOffset, refresh } = useGame();
   const progress = room?.puzzles[2];
   const cooldown = useSecondsUntil(progress?.retryAt ? progress.retryAt - serverTimeOffset : null);
   if (!room) return null;
@@ -20,8 +20,12 @@ export function Puzzle2() {
   const hints = room.puzzle2?.hints ?? [];
   const busy = pending === "puzzle2:draft" || pending === "puzzle:submit";
 
-  const toggle = (m: ModuleId) =>
-    void send({ type: "puzzle2:draft", order: draft.includes(m) ? draft.filter((x) => x !== m) : [...draft, m] });
+  // puzzle2:draft replaces the whole shared order, so edit from the latest server copy:
+  // another phone may have changed it since our last poll.
+  const toggle = async (m: ModuleId) => {
+    const latest = ((await refresh())?.puzzle2?.draft ?? draft) as ModuleId[];
+    await send({ type: "puzzle2:draft", order: latest.includes(m) ? latest.filter((x) => x !== m) : [...latest, m] });
+  };
   const submit = () =>
     void send({ type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 2, order: draft } });
   const rejected = lastSubmit?.puzzle === 2 && !lastSubmit.solved;
@@ -59,7 +63,7 @@ export function Puzzle2() {
                 type="button"
                 disabled={busy}
                 aria-pressed={pos >= 0}
-                onClick={() => toggle(m)}
+                onClick={() => void toggle(m)}
                 className={`flex min-h-16 flex-col items-center justify-center bg-inset font-display text-[20px] ${pos >= 0 ? "border-[3px] border-phosphor text-phosphor" : "border-[3px] border-dashed border-emergency text-emergency"}`}
               >
                 {MODULE_LABEL[m]}

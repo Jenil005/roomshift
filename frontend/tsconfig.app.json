@@ -22,9 +22,17 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
 
-    /* Canonical contracts shared with the backend (see vite.config.ts). */
+    /* Canonical contracts shared with the backend, and this package's copy of every
+       dependency for code imported from ../ar (see resolve.dedupe in vite.config.ts). */
     "paths": {
-      "@shared/*": ["../shared/*"]
+      "@shared/*": ["../shared/*"],
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "three": ["./node_modules/@types/three"],
+      "three/*": ["./node_modules/@types/three/*"],
+      "jsqr": ["./node_modules/jsqr"],
+      "@tensorflow/*": ["./node_modules/@tensorflow/*"],
+      "@tensorflow-models/*": ["./node_modules/@tensorflow-models/*"]
     }
   },
   "include": ["src"]

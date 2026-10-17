@@ -19,7 +19,7 @@ export default defineConfig({
   },
   webServer: {
     // Production build (live mode) on a different origin than the API: exercises CORS.
-    command: "npx vite build --outDir dist-e2e --emptyOutDir && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 4173 --strictPort",
+    command: "node scripts/prepare-assets.mjs && npx vite build --outDir dist-e2e --emptyOutDir && npx vite preview --outDir dist-e2e --host 127.0.0.1 --port 4173 --strictPort",
     url: "http://127.0.0.1:4173",
     env: { VITE_GAME_CLIENT: "live", VITE_API_ORIGIN: API },
     reuseExistingServer: false,

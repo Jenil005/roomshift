@@ -12,6 +12,8 @@ import type { Transport, TransportResult } from "./transport";
 
 export const SESSION_KEY = "roomshift.session.v2";
 export const POLL_INTERVAL_MS = 1_000;
+// The shared boot-order draft is edited by several phones at once: poll faster there.
+export const FAST_POLL_INTERVAL_MS = 500;
 const MAX_BACKOFF_MS = 8_000;
 const OFFLINE_AFTER_FAILURES = 5;
 
@@ -270,7 +272,7 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     const code = session.code;
     const res = await transport.view(code);
     if (!running || session?.code !== code) return;
-    let wait = pollMs;
+    let wait = snap.room?.phase === "PUZZLE_2" ? Math.min(pollMs, FAST_POLL_INTERVAL_MS) : pollMs;
     if (res.ok) {
       failures = 0;
       setConnection("live");
@@ -326,6 +328,13 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     },
     send,
     clearError: () => update({ lastError: null }),
+    async refresh() {
+      if (!session) return null;
+      const code = session.code;
+      const res = await transport.view(code);
+      if (res.ok && session?.code === code) applyRoom(res.data.room);
+      return snap.room;
+    },
     start() {
       if (running) return;
       running = true;

@@ -1,5 +1,6 @@
 import { useContext, useSyncExternalStore } from "react";
 import type { ClientEvent, GameResult } from "@shared/events";
+import type { Room } from "@shared/types";
 import type { ClientSnapshot, GameClient } from "./GameClient";
 import { GameContext, type GameContextValue } from "./context";
 
@@ -16,12 +17,13 @@ export function useGameClient(): GameClient {
 export type GameView = ClientSnapshot & {
   send: (event: ClientEvent) => Promise<GameResult>;
   clearError: () => void;
+  refresh: () => Promise<Room | null>;
 };
 
 export function useGame(): GameView {
   const client = useGameClient();
   const snap = useSyncExternalStore(client.subscribe, client.getSnapshot);
-  return { ...snap, send: client.send, clearError: client.clearError };
+  return { ...snap, send: client.send, clearError: client.clearError, refresh: client.refresh };
 }
 
 /** The current player's public entry, if any. */

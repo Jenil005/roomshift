@@ -12,6 +12,8 @@ export interface GameClient {
   /** Sends one request. Resolves with the server's result; never throws. */
   send(event: ClientEvent): Promise<GameResult>;
   clearError(): void;
+  /** Fetches the public room view now (e.g. right before editing shared state). */
+  refresh(): Promise<Room | null>;
   /** Starts background work (resume, polling, heartbeat). Safe to call again after stop(). */
   start(): void;
   stop(): void;

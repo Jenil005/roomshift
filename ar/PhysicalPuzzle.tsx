@@ -47,21 +47,29 @@ export type ScanMode = "ai" | "qr" | "manual";
  * Modes: AI Scanner (default; AI for book and cup, QR tag for keys), QR Backup, Manual.
  * onScanningChange(true) while a camera scan is live, so the host can pause heavy rendering
  * (for example RoomScene.stop()) during detection.
+ * serverJudged: the game server checks manual reports (the standalone demo has no server, so
+ * by default the manual form checks the order itself). onModeChange lets a host remount the
+ * scanner (to re-arm it after a rejected submit) in the mode the player chose.
  */
 export function PhysicalPuzzle({
   onResult,
   onScanSequence,
   onScanningChange,
+  onModeChange,
   initialMode = "ai",
   loadDetector,
+  serverJudged = false,
 }: {
   onResult: (result: PhysicalPuzzleResult) => void;
   onScanSequence?: (scanned: MarkerId[]) => void;
   onScanningChange?: (scanning: boolean) => void;
+  onModeChange?: (mode: ScanMode) => void;
   initialMode?: ScanMode;
   loadDetector?: () => Promise<ObjectDetector>;
+  serverJudged?: boolean;
 }) {
   const [mode, setMode] = useState<ScanMode>(initialMode);
+  const manualLabel = serverJudged ? "Manual report" : "Manual demo";
   const [aiLive, setAiLive] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -123,6 +131,7 @@ export function PhysicalPuzzle({
     clearScan();
     if (next !== "ai") setAiLive(false);
     setMode(next);
+    onModeChange?.(next);
   };
   const start = () => {
     clearScan();
@@ -143,7 +152,7 @@ export function PhysicalPuzzle({
         >
           <span />
           {mode === "manual"
-            ? "MANUAL DEMO"
+            ? manualLabel.toUpperCase()
             : mode === "ai"
               ? aiLive
                 ? "AI LIVE"
@@ -173,7 +182,7 @@ export function PhysicalPuzzle({
           aria-pressed={mode === "manual"}
           onClick={() => switchMode("manual")}
         >
-          Manual demo
+          {manualLabel}
         </button>
       </div>
       {mode === "ai" ? (
@@ -328,7 +337,7 @@ export function PhysicalPuzzle({
           </div>
         </>
       ) : (
-        <ManualOrder onResult={onResult} />
+        <ManualOrder onResult={onResult} serverJudged={serverJudged} />
       )}
     </section>
   );
@@ -336,8 +345,10 @@ export function PhysicalPuzzle({
 
 function ManualOrder({
   onResult,
+  serverJudged,
 }: {
   onResult: (result: PhysicalPuzzleResult) => void;
+  serverJudged: boolean;
 }) {
   const [order, setOrder] = useState<string[]>(["", "", ""]);
   const [message, setMessage] = useState("");
@@ -350,14 +361,16 @@ function ManualOrder({
           setMessage("Choose each object once.");
           return;
         }
-        if (order.some((id, index) => id !== PHYSICAL_ORDER[index])) {
+        if (!serverJudged && order.some((id, index) => id !== PHYSICAL_ORDER[index])) {
           setMessage(
             "That order does not match the clues. Try rearranging the objects.",
           );
           return;
         }
+        setMessage(serverJudged ? "Report sent. Waiting for the facility to check it…" : "");
         onResult({
-          solved: true,
+          // With a server, `solved` is only the client's guess and is ignored there.
+          solved: !serverJudged,
           markers: [],
           detectedIds: [],
           order: order as MarkerId[],
@@ -371,8 +384,10 @@ function ManualOrder({
       <h3>Arrange. Then report.</h3>
       <p>
         Arrange the real objects using the clues, then enter their order from
-        left to right. This is a manual demo; it does not verify the physical
-        scene.
+        left to right.{" "}
+        {serverJudged
+          ? "This is a manual report, recorded as unverified by camera."
+          : "This is a manual demo; it does not verify the physical scene."}
       </p>
       <div className="manual-slots">
         {["Left", "Middle", "Right"].map((position, index) => (

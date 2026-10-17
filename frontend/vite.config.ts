@@ -14,7 +14,7 @@ export default defineConfig({
     // ../ar and ../backend must use this package's single copy of React and friends, or hooks
     // break with two Reacts and Netlify builds fail when the root has no node_modules.
     alias: { '@shared': fromHere('../shared') },
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'three', 'jsqr', '@tensorflow/tfjs-core', '@tensorflow/tfjs-converter', '@tensorflow/tfjs-backend-webgl', '@tensorflow-models/coco-ssd'],
   },
   server: { fs: { allow: [fromHere('..')] } },
   // Playwright specs live in e2e/ and run with `npm run test:e2e`.
