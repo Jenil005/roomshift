@@ -33,6 +33,10 @@ venv/
 # Temporary
 .tmp/
 tmp/
+Microsoft/
+
+# Personal Claude Code settings
+.claude/settings.local.json
 
 # Browser test artifacts
 playwright-report/
