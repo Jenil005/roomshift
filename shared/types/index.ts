@@ -55,6 +55,18 @@ export interface Room {
   puzzles: { 1: PuzzleProgress; 2: PuzzleProgress };
   version: number; // increments on every state change
   events: RoomEventEntry[]; // most recent server events, oldest first (bounded)
+  puzzle2?: Puzzle2PublicState; // present from PUZZLE_2 on
+  final?: FinalPublicState; // present during FINAL_SEQUENCE
+}
+
+export interface Puzzle2PublicState {
+  draft: string[]; // shared boot order being built, module ids (shared/puzzles/commsBoot.ts)
+  hints: string[]; // public hints released after repeated wrong attempts
+}
+
+export interface FinalPublicState {
+  holding: string[]; // ids of players currently holding
+  forceAvailableAt: number; // server epoch ms after which the host may send final:force
 }
 
 // Server events are recorded on the room so clients can react to them (toasts, sounds).

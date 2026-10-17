@@ -14,7 +14,9 @@ export type ClientEvent =
   | { type: "room:me" } // returns the caller's PrivateClue
   | { type: "intro:skip" } // host only, INTRO -> PUZZLE_1 early
   | { type: "puzzle2:draft"; order: string[] }
-  | { type: "final:press"; held: boolean };
+  | { type: "final:press"; held: boolean }
+  | { type: "final:force" } // host only, after FINAL_FORCE_AFTER_MS in FINAL_SEQUENCE
+  | { type: "game:reset" }; // host only: back to LOBBY with the same players (demo replay)
 
 export type GameRequest = ClientEvent & { code?: string; playerToken?: string };
 
@@ -51,6 +53,13 @@ export interface MeData {
   room: Room;
 }
 export interface RoomData {
+  room: Room;
+}
+// puzzle:submit. A wrong answer is still ok:true (the request was valid); see `solved`.
+export interface SubmitData {
+  solved: boolean;
+  reason?: string; // short, safe to show; no hint about how close the guess was
+  retryAfterMs?: number; // puzzle 2 cooldown before the next submit is accepted
   room: Room;
 }
 

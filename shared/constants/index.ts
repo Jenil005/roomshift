@@ -25,5 +25,18 @@ export const LOBBY_DROP_AFTER_MS = 60_000;
 // INTRO auto-advances to PUZZLE_1 after this long; the host may skip earlier (intro:skip).
 export const INTRO_DURATION_MS = 8_000;
 
+// PUZZLE_1_COMPLETE / PUZZLE_2_COMPLETE show their success state this long, then advance.
+export const PHASE_COMPLETE_HOLD_MS = 4_000;
+
+// Puzzle 2 (docs/PUZZLE_2_SPEC.md): cooldown after the 1st, 2nd, and every later wrong try,
+// and the wrong-attempt counts that release public hint 1 and hint 2.
+export const PUZZLE2_COOLDOWNS_MS = [3_000, 6_000, 10_000] as const;
+export const PUZZLE2_HINT_AFTER_ATTEMPTS = [3, 6] as const;
+
+// Final sequence: a release counts as still holding for this long (network jitter grace).
+export const FINAL_SYNC_WINDOW_MS = 1_500;
+// After this long in FINAL_SEQUENCE the host may force the unlock (final:force).
+export const FINAL_FORCE_AFTER_MS = 30_000;
+
 // Rooms with no requests for this long are deleted.
 export const ROOM_IDLE_TTL_MS = 2 * 60 * 60 * 1000;
