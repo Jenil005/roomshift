@@ -19,5 +19,6 @@ function loop(timestamp) {
 
   const result = objectDetector.detectForVideo(video, timestamp);
   renderOverlay(result);
+  puzzle1.update(detections); // <- integrate puzzle logic
   requestAnimationFrame(loop);
 }
