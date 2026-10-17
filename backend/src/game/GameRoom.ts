@@ -37,7 +37,8 @@ export class GameRoom implements DurableObject {
     const now = Date.now()
     const { state, result, viewChanged } = reduce(prev, command, { now, random: Math.random })
 
-    if (command.type !== 'tick' || viewChanged) {
+    // Timer ticks and view polls only log when they changed something.
+    if ((command.type !== 'tick' && command.type !== 'room:view') || viewChanged) {
       const outcome = result.ok ? 'ok' : result.code
       console.info(`[game] ${state?.code ?? prev?.code ?? '-'} ${command.type} -> ${outcome} v${state?.version ?? '-'}`)
     }

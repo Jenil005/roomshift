@@ -30,6 +30,7 @@ import type { GameErrorCode, GameResult, JoinData, MeData, RoomData, ServerEvent
 import { checkOrder, describe, generatePuzzle, MODULES, type ModuleId } from '@shared/puzzles/commsBoot'
 import type {
   GamePhase,
+  PhysicalEvidence,
   Player,
   PrivateClue,
   PuzzleProgress,
@@ -109,11 +110,19 @@ export type EngineCommand =
   | ({ type: 'intro:skip' } & Authed)
   | ({ type: 'player:heartbeat' } & Authed)
   | ({ type: 'room:me' } & Authed)
-  | ({ type: 'puzzle:submit'; puzzle: 1 | 2; scanned?: string[]; manualCode?: string; order?: string[] } & Authed)
+  | ({
+      type: 'puzzle:submit'
+      puzzle: 1 | 2
+      physical?: PhysicalEvidence
+      scanned?: string[]
+      manualCode?: string
+      order?: string[]
+    } & Authed)
   | ({ type: 'puzzle2:draft'; order: string[] } & Authed)
   | ({ type: 'final:press'; held: boolean } & Authed)
   | ({ type: 'final:force' } & Authed)
   | { type: 'tick' } // timers: presence, auto-advance, idle cleanup
+  | { type: 'room:view' } // unauthenticated read of the public view (GET /api/game/room/:code)
 
 export interface EngineContext {
   now: number
@@ -373,6 +382,7 @@ function apply(
   if (!state) return { state: null, result: fail('room_not_found', 'No room with that code') }
 
   if (command.type === 'tick') return { state, result: ok({}) }
+  if (command.type === 'room:view') return { state, result: ok({ room: toView(state) }) }
 
   if (command.type === 'room:join') {
     if (command.rejoinTokenHash) {
@@ -530,7 +540,7 @@ function submitPuzzle1(
   now: number,
 ): { state: GameState; result: GameResult } {
   if (state.phase !== 'PUZZLE_1') return { state, result: fail('wrong_phase', 'The breaker puzzle is not active') }
-  const check = checkPuzzle1(command.scanned, command.manualCode)
+  const check = checkPuzzle1({ physical: command.physical, scanned: command.scanned, manualCode: command.manualCode })
   if (check.kind === 'invalid') return { state, result: fail('bad_request', check.message) }
   const progress = state.puzzles[1]
   if (check.kind === 'wrong') {
@@ -540,9 +550,10 @@ function submitPuzzle1(
     return { state, result: submitResult(state, false, check.reason) }
   }
   progress.solved = true
+  progress.verifiedBy = check.verifiedBy
   delete progress.lastFailure
   state.systems.breaker = true
-  emit(state, { type: 'puzzle:verified', puzzle: 1 }, now)
+  emit(state, { type: 'puzzle:verified', puzzle: 1, verifiedBy: check.verifiedBy }, now)
   setPhase(state, 'PUZZLE_1_COMPLETE', now)
   return { state, result: submitResult(state, true) }
 }

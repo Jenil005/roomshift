@@ -51,6 +51,18 @@ const requestSchema = z.discriminatedUnion('type', [
     type: z.literal('puzzle:submit'),
     submission: z.object({
       puzzle: z.union([z.literal(1), z.literal(2)]),
+      // The AR module's PhysicalPuzzleResult; unknown keys (solved, detectedIds, corners) are stripped.
+      physical: z
+        .object({
+          source: z.enum(['camera', 'manual']),
+          order: z.array(z.string().max(32)).max(8).optional(),
+          markers: z
+            .array(z.object({ id: z.string().max(32), center: z.object({ x: z.number(), y: z.number() }) }))
+            .max(8)
+            .optional(),
+          heldForMs: z.number().min(0).max(3_600_000).optional(),
+        })
+        .optional(),
       scanned: z.array(z.string().max(32)).max(8).optional(),
       manualCode: z.string().max(32).optional(),
       order: z.array(z.string().max(32)).max(8).optional(),
@@ -80,6 +92,15 @@ async function send(env: Env, code: string, command: EngineCommand): Promise<Gam
 }
 
 export function registerGameRoutes(app: Hono<AppContext>): void {
+  // Public room view for pages that cannot use DeepSpace hooks (the plain-JS AR room page).
+  // React pages should prefer useRoomView(), which is pushed live instead of polled.
+  app.get('/api/game/room/:code', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const code = normalizeRoomCode(c.req.param('code'))
+    if (!code) return reply(c, fail('room_not_found', 'No room with that code'))
+    return reply(c, await send(c.env, code, { type: 'room:view' }))
+  })
+
   app.post('/api/game', async (c) => {
     const text = await c.req.text()
     if (text.length > MAX_BODY_BYTES) return reply(c, fail('bad_request', 'Request too large'))
@@ -141,8 +162,8 @@ function toCommand(req: AuthedRequest, tokenHash: string): EngineCommand {
     case 'room:ready':
       return { type: req.type, tokenHash, ready: req.ready }
     case 'puzzle:submit': {
-      const { puzzle, scanned, manualCode, order } = req.submission
-      return { type: req.type, tokenHash, puzzle, scanned, manualCode, order }
+      const { puzzle, physical, scanned, manualCode, order } = req.submission
+      return { type: req.type, tokenHash, puzzle, physical, scanned, manualCode, order }
     }
     case 'puzzle2:draft':
       return { type: req.type, tokenHash, order: req.order }

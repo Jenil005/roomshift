@@ -326,6 +326,41 @@ describe('puzzle 1 (physical order)', () => {
   it('accepts the manual fallback code', () => {
     const g = atPuzzle1()
     expect(submit1(g, { manualCode: 'b-c-k' }).result).toMatchObject({ ok: true, data: { solved: true } })
+    expect(g.state!.puzzles[1].verifiedBy).toBe('manual')
+  })
+
+  it('accepts AR camera evidence and records how it was verified', () => {
+    const g = atPuzzle1()
+    const physical = {
+      source: 'camera' as const,
+      heldForMs: 1500,
+      markers: [
+        { id: 'CUP', center: { x: 0.5, y: 0.5 } },
+        { id: 'BOOK', center: { x: 0.2, y: 0.5 } },
+        { id: 'KEYS', center: { x: 0.8, y: 0.5 } },
+      ],
+    }
+    const res = g.run({ type: 'puzzle:submit', tokenHash: 'h1', puzzle: 1, physical }).result
+    expect(res).toMatchObject({ ok: true, data: { solved: true, room: { puzzles: { 1: { verifiedBy: 'camera' } } } } })
+    expect(g.state!.events.find((e) => e.type === 'puzzle:verified')).toMatchObject({ puzzle: 1, verifiedBy: 'camera' })
+  })
+})
+
+describe('room:view', () => {
+  it('returns the public view without auth and changes nothing', () => {
+    const g = startedGame()
+    const before = JSON.stringify(g.state)
+    const out = g.run({ type: 'room:view' })
+    expect(out.result).toMatchObject({ ok: true, data: { room: { code: 'ABCD', phase: 'INTRO' } } })
+    expect(out.viewChanged).toBe(false)
+    expect(JSON.stringify(g.state)).toBe(before)
+    expect(JSON.stringify(out.result)).not.toContain('h0')
+  })
+
+  it('still applies timers, so a poll can observe the intro ending', () => {
+    const g = startedGame()
+    g.advance(INTRO_DURATION_MS)
+    expect(g.run({ type: 'room:view' }).result).toMatchObject({ ok: true, data: { room: { phase: 'PUZZLE_1' } } })
   })
 })
 

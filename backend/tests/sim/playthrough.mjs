@@ -158,8 +158,25 @@ async function main() {
   check((await p1({ scanned: ['book', 'phone', 'keys'] })).code === 'bad_request', 'unknown object id -> bad_request')
   const wrong1 = await p1({ scanned: ['keys', 'cup', 'book'] })
   check(wrong1.ok && wrong1.data.solved === false && wrong1.data.reason === 'Wrong order', 'wrong scan order -> solved:false', wrong1)
-  const ok1 = await p1({ scanned: ['book', 'cup', 'keys'], solved: true })
-  check(ok1.ok && ok1.data.solved && ok1.data.room.systems.breaker, 'correct scan -> breaker online', ok1)
+  // Exactly what ar/physicalOrder.ts toCameraResult() produces, extra fields included.
+  const arResult = (xs, heldForMs = 1300) => {
+    const markers = ['BOOK', 'CUP', 'KEYS'].map((id, i) => ({
+      id,
+      center: { x: xs[i], y: 0.5 },
+      corners: [0, 1, 2, 3].map(() => ({ x: xs[i], y: 0.5 })),
+    }))
+    return { solved: true, markers, detectedIds: markers.map((m) => m.id), order: ['BOOK', 'CUP', 'KEYS'], source: 'camera', heldForMs }
+  }
+  const lie = await p1({ physical: arResult([0.8, 0.5, 0.2]) })
+  check(lie.ok && lie.data.solved === false && lie.data.reason === 'Wrong order', 'AR result claiming solved, markers out of order -> rejected', lie)
+  const shaky = await p1({ physical: arResult([0.2, 0.5, 0.8], 400) })
+  check(shaky.ok && shaky.data.reason === 'Hold the objects steady', 'AR result held too briefly -> rejected', shaky)
+  const ok1 = await p1({ physical: arResult([0.2, 0.5, 0.8]) })
+  check(ok1.ok && ok1.data.solved && ok1.data.room.systems.breaker, 'AR camera evidence -> breaker online', ok1)
+  check(ok1.data?.room.puzzles[1].verifiedBy === 'camera', 'puzzle 1 recorded as verified by camera')
+  const polled = await fetch(`${BASE}/api/game/room/${code.toLowerCase()}`).then((r) => r.json())
+  check(polled.ok && polled.data.room.systems.breaker === true, 'GET /api/game/room/:code shows breaker online', polled)
+  check(!JSON.stringify(polled).includes(tokA), 'polled view contains no token')
   check((await p1({ scanned: ['book', 'cup', 'keys'] })).code === 'wrong_phase', 'duplicate puzzle 1 submit -> wrong_phase')
   await waitFor(() => live.latest?.phase === 'PUZZLE_2', 'server auto-advances to PUZZLE_2', 8000)
   check(live.latest?.phase === 'PUZZLE_2', 'live view shows PUZZLE_2')
