@@ -13,10 +13,11 @@
     button, input { font: inherit; border-radius: 10px; border: 1px solid #2c3b4c; background: #101822; color: #dfe9f3; padding: 12px 18px; }
     button { cursor: pointer; } button.primary { background: #ffb020; color: #1a1200; border-color: #ffb020; font-weight: 700; }
     input { text-transform: uppercase; text-align: center; width: 120px; letter-spacing: .2em; }
-    #hud { position: fixed; top: env(safe-area-inset-top, 0); left: 0; right: 0; display: none; justify-content: space-between; align-items: center; gap: 8px; padding: 10px; z-index: 3; pointer-events: none; font-size: 13px; }
-    #hud > * { pointer-events: auto; } #hud .pill { background: rgba(5,7,10,.65); border: 1px solid #2c3b4c; border-radius: 999px; padding: 6px 12px; }
-    #hud button { padding: 6px 12px; font-size: 13px; }
-    #toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0) + 28px); left: 50%; transform: translateX(-50%); background: rgba(5,7,10,.8); border: 1px solid #ffb020; border-radius: 12px; padding: 10px 16px; z-index: 4; opacity: 0; transition: opacity .25s; pointer-events: none; font-size: 14px; }
+    #hud { position: fixed; top: env(safe-area-inset-top, 0); left: 0; right: 0; display: none; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 10px; z-index: 3; pointer-events: none; font-size: 13px; }
+    #hud > * { pointer-events: auto; } #hud .pill { background: rgba(5,7,10,.65); border: 1px solid #2c3b4c; border-radius: 999px; padding: 6px 12px; white-space: nowrap; }
+    #hudButtons { display: flex; gap: 6px; margin-left: auto; }
+    #hud button { padding: 8px 12px; font-size: 13px; min-height: 36px; }
+    #toast { position: fixed; bottom: calc(env(safe-area-inset-bottom, 0) + 28px); left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100vw - 32px); overflow-wrap: anywhere; text-align: center; box-sizing: border-box; background: rgba(5,7,10,.8); border: 1px solid #ffb020; border-radius: 12px; padding: 10px 16px; z-index: 4; opacity: 0; transition: opacity .25s; pointer-events: none; font-size: 14px; }
   </style>
 </head>
 <body>
@@ -24,7 +25,7 @@
   <div id="hud">
     <span class="pill" id="roomPill"></span>
     <span class="pill" id="peerPill">1 player</span>
-    <span style="display:flex; gap:6px">
+    <span id="hudButtons">
       <button id="motionBtn">Motion</button>
       <button id="recenterBtn">Recenter</button>
       <button id="resetBtn" style="display:none">Reset</button>

@@ -24,19 +24,19 @@ What can be tested today:
 
 ## A. Shared AR room, one phone (possible after the build is fixed)
 
-1. Open the room page on phone 1 and tap **Host a room**. The Blackout Protocol control room renders. The text is readable in portrait, the frame does not stutter, and the HUD is not hidden under the notch.
+1. Open the room page on phone 1 and tap **Host a room**. The Blackout Protocol control room renders. The text is readable in portrait, the frame does not stutter, and the HUD is not hidden under the notch. All three buttons (Motion, Recenter, Reset) are fully on screen, wrapping to a second row on narrow phones.
 2. Drag with one finger. The view rotates and the page does not scroll or zoom.
 3. Tap **Motion**.
    - **iPhone:** a motion permission prompt appears. Allow it. Moving the phone now turns the view.
    - **Android:** no prompt appears. Moving the phone turns the view.
-   - Write down the exact toast text.
+   - The toast says "Motion on: move your phone. Tap Recenter to face the breaker." Write down the exact text if it differs (for example "No motion sensor data").
 4. Walk a full circle. The view follows smoothly, with no jumps at 0°/360° and no flip when you look straight up or down.
 5. Point the phone anywhere and tap **Recenter**. That direction becomes the breaker wall.
 6. Rotate the phone to landscape. The view is still level, not rotated 90°. (Older iOS without `screen.orientation` is a known risk here.)
 7. Tap the bobbing diamond at the breaker. The lights come on. Then tap the terminal, then the door. Each step changes the room, and the door slides open.
 8. Tap the door before the breaker (use Reset first). You see a "Restore breaker first." notice and nothing changes. These are the demo-only rules from `sync/rules.ts`; production gating belongs to the backend.
-9. Repeat step 3 on an iPhone and tap **Don't Allow**. Drag still works, and the toast says motion is unavailable.
-10. Lock the phone for 10 s, then unlock it. The page resumes without a blank canvas and the controls still respond. Also write down whether the phone got noticeably warm while the page was in the background.
+9. Repeat step 3 on an iPhone and tap **Don't Allow**. Drag still works, and the toast says "Motion access was denied. Drag to look instead." Over plain HTTP the toast says "Motion needs HTTPS" instead.
+10. Lock the phone for 10 s, then unlock it. The page resumes without a blank canvas and the controls still respond. Rendering is paused while the page is hidden, so the phone should not get warm in the background; write down if it does.
 
 ## B. Shared AR room, two phones (BLOCKED until Task A3 DeepSpaceSync)
 
@@ -58,7 +58,7 @@ What can be tested today:
 23. Make the room dim. Scanning gets harder: note the distance and angle that still work. On Android Chrome a **Torch on** button appears; check that it lights the cards. On iPhone there is no torch button, and the guidance line suggests more light.
 24. Close the scan screen. The camera indicator (the green dot on iOS, the camera icon on Android) turns off.
 25. Start a scan, then lock the phone and unlock it. The camera was released, and scanning resumes or asks to restart.
-26. Deny camera permission (reset site permissions first). The manual code field appears and is reachable in at most 2 taps. Entering the sequence by hand works.
+26. Deny camera permission (reset site permissions first). The manual code field appears and is reachable in at most 2 taps. Entering the sequence by hand works. On an iPhone, tapping a dropdown must not zoom the page, and on phones up to about 430 px wide the three dropdowns are stacked and read "Select object" in full.
 27. Open the page over plain HTTP. You see an "insecure context" message and the manual field. The page must not crash or hang.
 28. Tap **Clear scans** and confirm the list empties. (Sending the sequence in `puzzle:submit` needs the frontend integration, Task A4. Only the backend's answer may move the game forward.)
 

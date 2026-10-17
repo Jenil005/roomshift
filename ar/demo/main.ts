@@ -1,3 +1,4 @@
+import type { LookControls } from "../room/LookControls";
 import { RoomScene } from "../room/RoomScene";
 import { blackoutProtocol } from "../templates/blackoutProtocol";
 import { LocalSync } from "../sync/LocalSync";
@@ -8,6 +9,14 @@ import type { RoomSync } from "../sync/RoomSync";
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 const randomCode = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ"[Math.floor(Math.random() * 24)]).join("");
 const playerId = crypto.randomUUID();
+
+const MOTION_MESSAGE: Record<LookControls["gyroStatus"], string> = {
+  on: "Motion on: move your phone. Tap Recenter to face the breaker.",
+  off: "Motion is off. Drag to look.",
+  denied: "Motion access was denied. Drag to look instead.",
+  unavailable: "No motion sensor data. Drag to look instead.",
+  insecure: "Motion needs HTTPS. Drag to look instead.",
+};
 
 let toastTimer = 0;
 function toast(msg: string) {
@@ -44,11 +53,15 @@ function enter(code: string, isHost: boolean) {
   sync.start();
   scene.start();
   window.setInterval(() => {
+    if (document.hidden) return; // others drop this player's orb after 3 s, and it returns on resume
     const v = scene.getView();
     sync.sendPresence(v.yaw, v.pitch);
   }, 100);
 
-  $("motionBtn").onclick = async () => toast((await scene.controls.enableGyro()) ? "Motion on: move your phone" : "Motion unavailable. Drag to look.");
+  $("motionBtn").onclick = async () => {
+    await scene.controls.enableGyro();
+    toast(MOTION_MESSAGE[scene.controls.gyroStatus]);
+  };
   $("recenterBtn").onclick = () => scene.controls.recenter();
   $("resetBtn").onclick = () => sync.reset?.();
 }

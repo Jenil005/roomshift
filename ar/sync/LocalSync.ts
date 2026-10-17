@@ -28,6 +28,7 @@ export class LocalSync implements RoomSync {
     this.ch.onmessage = (e: MessageEvent<Msg>) => this.handle(e.data);
     if (this.isHost) this.pushState();
     else this.ch.postMessage({ t: "hello", from: this.playerId } satisfies Msg);
+    document.addEventListener("visibilitychange", this.onVisible);
     this.timer = window.setInterval(() => {
       const now = Date.now();
       let changed = false;
@@ -36,7 +37,18 @@ export class LocalSync implements RoomSync {
     }, 1000);
   }
 
-  stop() { window.clearInterval(this.timer); this.ch?.close(); }
+  stop() {
+    window.clearInterval(this.timer);
+    document.removeEventListener("visibilitychange", this.onVisible);
+    this.ch?.close();
+  }
+
+  // A tab that was hidden may have missed updates: the host re-sends state, a guest asks for it.
+  private onVisible = () => {
+    if (document.hidden) return;
+    if (this.isHost) this.pushState();
+    else this.ch.postMessage({ t: "hello", from: this.playerId } satisfies Msg);
+  };
 
   onState(cb: (s: RoomState) => void) { this.stateCbs.push(cb); }
   onPeers(cb: (p: PeerPresence[]) => void) { this.peerCbs.push(cb); }

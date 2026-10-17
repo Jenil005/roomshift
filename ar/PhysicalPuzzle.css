@@ -211,9 +211,10 @@
   right: 15px;
   display: flex;
   justify-content: space-between;
-  gap: 12px;
-  font: 8px monospace;
-  letter-spacing: 1px;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  font: 10px monospace;
+  letter-spacing: 0.5px;
   color: white;
   text-shadow: 0 1px 3px black;
 }
@@ -355,9 +356,6 @@
   .scanner-panel .camera-placeholder {
       padding: 26px 20px;
   }
-  .scanner-panel .camera-caption {
-      font-size: 7px;
-  }
   .scanner-panel .manual-panel {
       padding: 25px 18px;
   }
@@ -366,14 +364,20 @@
   }
   .scanner-panel .manual-slots select {
       padding: 13px 5px;
-      font-size: 11px;
+      font-size: 16px;
   }
   .scanner-panel .error-message {
       margin: 16px 18px 0;
   }
 }
+/* Three 16px selects do not fit side by side on the narrowest phones: stack them. */
+@media (max-width: 480px) {
+  .scanner-panel .manual-slots {
+      flex-direction: column;
+  }
+}
 .scanner-panel .scan-sequence {
-  font: 11px monospace;
+  font: 12px monospace;
   color: var(--lime);
   margin: 14px 0 0;
 }

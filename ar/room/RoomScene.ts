@@ -95,6 +95,7 @@ export class RoomScene {
 
     canvas.addEventListener("pointerdown", this.onPointerDown);
     canvas.addEventListener("pointerup", this.onPointerUp);
+    canvas.addEventListener("webglcontextrestored", this.onContextRestored);
     this.resizeObserver.observe(canvas);
     this.resize();
     this.applyState(this.state);
@@ -117,15 +118,44 @@ export class RoomScene {
 
   getView() { return { yaw: this.controls.yaw, pitch: this.controls.pitch }; }
 
-  start() { this.renderer.setAnimationLoop((time) => this.frame(time)); }
+  // The render loop runs only while started and the page is visible (saves battery and heat).
+  start() {
+    this.running = true;
+    document.addEventListener("visibilitychange", this.syncLoop);
+    this.syncLoop();
+  }
+
+  private running = false;
+
+  private syncLoop = () => {
+    const on = this.running && !document.hidden;
+    this.renderer.setAnimationLoop(on ? (time) => this.frame(time) : null);
+  };
+
+  // Phones may drop the WebGL context while locked. three.js rebuilds GPU state on restore;
+  // re-upload the canvas textures and redraw the current state.
+  private onContextRestored = () => {
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      mats.forEach((m) => {
+        const map = (m as THREE.MeshStandardMaterial).map;
+        if (map) map.needsUpdate = true;
+      });
+    });
+    this.applyState(this.state);
+  };
 
   // Release everything this scene holds so a single-page app can unmount and remount it.
   // Phones allow only a few live WebGL contexts, so the context is released explicitly.
   dispose() {
+    this.running = false;
     this.renderer.setAnimationLoop(null);
+    document.removeEventListener("visibilitychange", this.syncLoop);
     this.resizeObserver.disconnect();
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
+    this.canvas.removeEventListener("webglcontextrestored", this.onContextRestored);
     this.controls.dispose();
     this.scene.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
