@@ -10,12 +10,19 @@
 import type { GameResult } from '@shared/events'
 import type { Env } from '../../worker'
 import { nextDeadline, reduce, toView, type EngineCommand, type GameState } from './engine'
+import { RateLimiter } from './rateLimit'
 
 const STATE_KEY = 'game'
 const MIRRORED_KEY = 'mirroredVersion'
 const MIN_ALARM_DELAY_MS = 250
+const MIRROR_TIMEOUT_MS = 5_000
 
 export class GameRoom implements DurableObject {
+  // Per player (token hash): drafts can be dragged quickly, so allow short bursts.
+  private readonly playerLimit = new RateLimiter({ capacity: 20, refillPerSec: 5 })
+  // Per room, for unauthenticated traffic: joins and view polls from every phone.
+  private readonly openLimit = new RateLimiter({ capacity: 40, refillPerSec: 10 })
+
   constructor(
     private readonly ctx: DurableObjectState,
     private readonly env: Env,
@@ -23,12 +30,33 @@ export class GameRoom implements DurableObject {
 
   async fetch(request: Request): Promise<Response> {
     const command = (await request.json()) as EngineCommand
-    const result = await this.ctx.blockConcurrencyWhile(() => this.run(command))
+    const key = 'tokenHash' in command && command.type !== 'room:join' ? command.tokenHash : null
+    const waitMs = key ? this.playerLimit.take(key, Date.now()) : this.openLimit.take(command.type, Date.now())
+    if (waitMs > 0) {
+      const limited: GameResult = { ok: false, code: 'rate_limited', message: 'Too many requests, slow down', retryAfterMs: waitMs }
+      return Response.json(limited)
+    }
+    const result = await this.ctx.blockConcurrencyWhile(() => this.safeRun(command))
     return Response.json(result)
   }
 
   async alarm(): Promise<void> {
-    await this.ctx.blockConcurrencyWhile(() => this.run({ type: 'tick' }))
+    await this.ctx.blockConcurrencyWhile(() => this.safeRun({ type: 'tick' }))
+  }
+
+  /**
+   * An exception escaping blockConcurrencyWhile resets the whole object, which would lose
+   * a live game. Catch everything: storage is only written after a successful reduce, so a
+   * failed command leaves the room exactly as it was.
+   */
+  private async safeRun(command: EngineCommand): Promise<GameResult> {
+    try {
+      return await this.run(command)
+    } catch (err) {
+      const message = err instanceof Error ? `${err.message}\n${err.stack ?? ''}` : String(err)
+      console.error(`[game] ${command.type} crashed: ${message}`)
+      return { ok: false, code: 'server_error', message: 'Something went wrong, try again' }
+    }
   }
 
   private async run(command: EngineCommand): Promise<GameResult> {
@@ -86,6 +114,8 @@ export class GameRoom implements DurableObject {
             'X-App-Action': 'true',
           },
           body: JSON.stringify(body),
+          // A hung write must not hold the room's lock; a failed mirror is retried next run.
+          signal: AbortSignal.timeout(MIRROR_TIMEOUT_MS),
         }),
       )
       const json = (await res.json()) as { success?: boolean; error?: string }

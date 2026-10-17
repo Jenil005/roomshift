@@ -15,9 +15,15 @@ import type { GameErrorCode, GameResult } from '@shared/events'
 import type { AppContext, Env } from '../../worker.js'
 import { CODE_TAKEN_MESSAGE, type EngineCommand, type JoinResultData } from '../game/engine.js'
 import { hashToken, newPlayerId, newPlayerToken, newRoomCode, normalizeRoomCode } from '../game/ids.js'
+import { RateLimiter } from '../game/rateLimit.js'
 
 const MAX_BODY_BYTES = 4096
 const CREATE_ATTEMPTS = 5
+
+// Per-IP, per-isolate abuse limits. Generous: a whole venue may share one public IP.
+// Exact per-player limits are enforced inside each GameRoom.
+const ipLimit = new RateLimiter({ capacity: 120, refillPerSec: 30 })
+const createLimit = new RateLimiter({ capacity: 10, refillPerSec: 1 / 6 })
 
 const STATUS: Record<GameErrorCode, ContentfulStatusCode> = {
   bad_request: 400,
@@ -30,6 +36,7 @@ const STATUS: Record<GameErrorCode, ContentfulStatusCode> = {
   wrong_phase: 409,
   not_enough_players: 409,
   cooldown: 429,
+  rate_limited: 429,
   not_implemented: 501,
   server_error: 500,
 }
@@ -82,26 +89,43 @@ function reply(c: { json: (body: unknown, status: ContentfulStatusCode) => Respo
 }
 
 async function send(env: Env, code: string, command: EngineCommand): Promise<GameResult> {
-  const stub = env.GAME_ROOMS.get(env.GAME_ROOMS.idFromName(code))
-  const res = await stub.fetch('https://game-room/command', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(command),
-  })
-  return (await res.json()) as GameResult
+  try {
+    const stub = env.GAME_ROOMS.get(env.GAME_ROOMS.idFromName(code))
+    const res = await stub.fetch('https://game-room/command', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(command),
+    })
+    return (await res.json()) as GameResult
+  } catch (err) {
+    // A room that is restarting or overloaded must still answer in the GameResult shape.
+    console.error(`[game] ${code} ${command.type} unreachable: ${err instanceof Error ? err.message : String(err)}`)
+    return fail('server_error', 'The room is not responding, try again')
+  }
 }
+
+function limited(waitMs: number): GameResult {
+  return { ok: false, code: 'rate_limited', message: 'Too many requests, slow down', retryAfterMs: waitMs }
+}
+
+const clientIp = (req: Request) => req.headers.get('CF-Connecting-IP') ?? 'local'
 
 export function registerGameRoutes(app: Hono<AppContext>): void {
   // Public room view for pages that cannot use DeepSpace hooks (the plain-JS AR room page).
   // React pages should prefer useRoomView(), which is pushed live instead of polled.
   app.get('/api/game/room/:code', async (c) => {
     c.header('Cache-Control', 'no-store')
+    const waitMs = ipLimit.take(clientIp(c.req.raw), Date.now())
+    if (waitMs > 0) return reply(c, limited(waitMs))
     const code = normalizeRoomCode(c.req.param('code'))
     if (!code) return reply(c, fail('room_not_found', 'No room with that code'))
     return reply(c, await send(c.env, code, { type: 'room:view' }))
   })
 
   app.post('/api/game', async (c) => {
+    const ip = clientIp(c.req.raw)
+    const waitMs = ipLimit.take(ip, Date.now())
+    if (waitMs > 0) return reply(c, limited(waitMs))
     const text = await c.req.text()
     if (text.length > MAX_BODY_BYTES) return reply(c, fail('bad_request', 'Request too large'))
     let raw: unknown
@@ -118,6 +142,8 @@ export function registerGameRoutes(app: Hono<AppContext>): void {
     const req = parsed.data
 
     if (req.type === 'room:create') {
+      const createWait = createLimit.take(ip, Date.now())
+      if (createWait > 0) return reply(c, limited(createWait))
       const playerToken = newPlayerToken()
       const tokenHash = await hashToken(playerToken)
       const playerId = newPlayerId()

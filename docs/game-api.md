@@ -6,8 +6,9 @@ Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/e
 
 1. `POST /api/game` with a JSON `GameRequest`. Every request except `room:create` and a first `room:join` carries `code` and `playerToken`.
 2. Replies are `{ ok: true, data }` or `{ ok: false, code, message, retryAfterMs? }`. Show `message`; branch on `code`.
-3. `room:create` / `room:join` return `playerToken`. Store it (`saveSession`). Rejoin after a reload with `room:join` + the stored `playerToken`.
-4. Send `player:heartbeat` every 5 s while the page is open (`useHeartbeat`). Silent for 15 s = shown as disconnected.
+3. `room:create` / `room:join` return `playerToken`. Store it (`saveSession`). On every page load call `resumeSession()`: it rejoins with the stored token (same seat, role and clues) and clears the session only if the room is gone.
+4. Send `player:heartbeat` every 5 s while the page is open (`useHeartbeat`). Silent for 15 s = shown as disconnected. If the host is gone 30 s, host passes to a connected player (`room.hostId` changes).
+5. `rate_limited` (HTTP 429) means slow down: wait `retryAfterMs` and retry. `cooldown` (also 429) is a game rule: show a countdown from `retryAfterMs`. `server_error` is safe to retry.
 
 ## 2. Live state
 
@@ -26,7 +27,7 @@ Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/e
 2. Camera results: the server re-derives the order from `markers[].center.x` and requires `heldForMs >= 1200`. `solved`, `order` and `detectedIds` from the client are ignored.
 3. Manual mode (`source: 'manual'`, `order`) is accepted and recorded as `room.puzzles[1].verifiedBy = 'manual'`, so the UI can say "verified manually".
 4. Marker ids match case-insensitively. A QR scan sequence (`scanned`) and a typed initials code (`manualCode: 'BCK'`) still work.
-5. A wrong arrangement returns `ok: true, data: { solved: false, reason }`. Malformed evidence returns `bad_request` and is not counted.
+5. A wrong arrangement returns `ok: true, data: { solved: false, reason, retryAfterMs: 1000 }`; submits during that second get `cooldown`. Malformed evidence returns `bad_request` and is not counted.
 
 ## 4. Puzzle 2 and finale
 

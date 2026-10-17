@@ -3,10 +3,12 @@ import {
   DISCONNECT_AFTER_MS,
   FINAL_FORCE_AFTER_MS,
   FINAL_SYNC_WINDOW_MS,
+  HOST_HANDOFF_AFTER_MS,
   INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
   PHASE_COMPLETE_HOLD_MS,
+  PUZZLE1_COOLDOWN_MS,
   ROOM_IDLE_TTL_MS,
 } from '@shared/constants'
 import type { MeData, SubmitData } from '@shared/events'
@@ -304,9 +306,13 @@ describe('puzzle 1 (physical order)', () => {
   it('counts wrong and partial orders as failed attempts and records the event', () => {
     const g = atPuzzle1()
     const wrong = submit1(g, { scanned: ['cup', 'book', 'keys'] }).result
-    expect(wrong).toMatchObject({ ok: true, data: { solved: false, reason: 'Wrong order' } })
+    expect(wrong).toMatchObject({ ok: true, data: { solved: false, reason: 'Wrong order', retryAfterMs: PUZZLE1_COOLDOWN_MS } })
+    // A retry inside the short cooldown is refused and not counted.
+    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'cooldown' })
+    g.advance(PUZZLE1_COOLDOWN_MS)
     const partial = submit1(g, { scanned: ['book', 'cup'] }).result
     expect(partial).toMatchObject({ ok: true, data: { solved: false, reason: 'Not all objects detected' } })
+    g.advance(PUZZLE1_COOLDOWN_MS)
     expect(submit1(g, { manualCode: 'XYZ' }).result).toMatchObject({ ok: true, data: { solved: false } })
     expect(g.state!.puzzles[1]).toMatchObject({ attempts: 3, solved: false })
     expect(g.state!.phase).toBe('PUZZLE_1')
@@ -343,6 +349,39 @@ describe('puzzle 1 (physical order)', () => {
     const res = g.run({ type: 'puzzle:submit', tokenHash: 'h1', puzzle: 1, physical }).result
     expect(res).toMatchObject({ ok: true, data: { solved: true, room: { puzzles: { 1: { verifiedBy: 'camera' } } } } })
     expect(g.state!.events.find((e) => e.type === 'puzzle:verified')).toMatchObject({ puzzle: 1, verifiedBy: 'camera' })
+  })
+})
+
+describe('host handoff', () => {
+  // Bea keeps sending heartbeats; the host (h0) goes silent mid-game.
+  function hostGoesSilent(ms: number) {
+    const g = atPuzzle1()
+    for (let t = 0; t < ms; t += 5000) {
+      g.advance(Math.min(5000, ms - t))
+      g.run({ type: 'player:heartbeat', tokenHash: 'h1' })
+    }
+    return g
+  }
+
+  it('passes host to a connected player after the host is away long enough', () => {
+    const g = hostGoesSilent(HOST_HANDOFF_AFTER_MS + 1000)
+    expect(g.state!.hostId).toBe('p1')
+    expect(g.state!.players.map((p) => p.isHost)).toEqual([false, true])
+    // The new host can use host controls; the old host keeps role and clues.
+    expect(g.run({ type: 'game:reset', tokenHash: 'h1' }).result.ok).toBe(true)
+    expect(g.state!.players[0].id).toBe('p0')
+  })
+
+  it('does not hand off during a short absence', () => {
+    const g = hostGoesSilent(HOST_HANDOFF_AFTER_MS - 1000)
+    expect(g.state!.hostId).toBe('p0')
+    expect(g.state!.players[0].connected).toBe(false)
+  })
+
+  it('schedules the handoff on the alarm', () => {
+    const g = hostGoesSilent(DISCONNECT_AFTER_MS + 5000)
+    const host = g.state!.players[0]
+    expect(nextDeadline(g.state)).toBeLessThanOrEqual(host.lastSeen + HOST_HANDOFF_AFTER_MS + 1)
   })
 })
 

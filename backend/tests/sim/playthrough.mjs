@@ -158,6 +158,7 @@ async function main() {
   check((await p1({ scanned: ['book', 'phone', 'keys'] })).code === 'bad_request', 'unknown object id -> bad_request')
   const wrong1 = await p1({ scanned: ['keys', 'cup', 'book'] })
   check(wrong1.ok && wrong1.data.solved === false && wrong1.data.reason === 'Wrong order', 'wrong scan order -> solved:false', wrong1)
+  await sleep(1100) // puzzle 1 cooldown after a wrong attempt
   // Exactly what ar/physicalOrder.ts toCameraResult() produces, extra fields included.
   const arResult = (xs, heldForMs = 1300) => {
     const markers = ['BOOK', 'CUP', 'KEYS'].map((id, i) => ({
@@ -169,8 +170,12 @@ async function main() {
   }
   const lie = await p1({ physical: arResult([0.8, 0.5, 0.2]) })
   check(lie.ok && lie.data.solved === false && lie.data.reason === 'Wrong order', 'AR result claiming solved, markers out of order -> rejected', lie)
+  const tooSoon = await p1({ physical: arResult([0.2, 0.5, 0.8]) })
+  check(tooSoon.code === 'cooldown' && tooSoon.status === 429, 'retry inside the 1 s puzzle 1 cooldown -> cooldown', tooSoon)
+  await sleep(1100)
   const shaky = await p1({ physical: arResult([0.2, 0.5, 0.8], 400) })
   check(shaky.ok && shaky.data.reason === 'Hold the objects steady', 'AR result held too briefly -> rejected', shaky)
+  await sleep(1100)
   const ok1 = await p1({ physical: arResult([0.2, 0.5, 0.8]) })
   check(ok1.ok && ok1.data.solved && ok1.data.room.systems.breaker, 'AR camera evidence -> breaker online', ok1)
   check(ok1.data?.room.puzzles[1].verifiedBy === 'camera', 'puzzle 1 recorded as verified by camera')
@@ -217,6 +222,13 @@ async function main() {
   const reset = await api({ type: 'game:reset', code, playerToken: tokA })
   check(reset.ok && reset.data.room.phase === 'LOBBY' && !reset.data.room.systems.door, 'host reset -> LOBBY, systems off', reset)
   await waitFor(() => live.latest?.phase === 'LOBBY', 'live view shows LOBBY after reset')
+
+  // --- per-player rate limit: a burst from one phone is throttled, others are not ---
+  const burst = await Promise.all(Array.from({ length: 30 }, () => api({ type: 'player:heartbeat', code, playerToken: tokB })))
+  const throttled = burst.filter((r) => r.code === 'rate_limited')
+  check(throttled.length > 0 && throttled.every((r) => r.status === 429 && r.retryAfterMs > 0), 'burst of 30 requests from one player -> rate_limited', burst.map((r) => r.code ?? 'ok'))
+  check((await api({ type: 'player:heartbeat', code, playerToken: tokA })).ok, 'other player is not throttled by the burst')
+  await sleep(4500) // let the bucket refill
 
   // --- full room + leave cleanup (second room) ---
   const h = await api({ type: 'room:create', playerName: 'H' })

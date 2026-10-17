@@ -14,6 +14,7 @@ import {
   DISCONNECT_AFTER_MS,
   FINAL_FORCE_AFTER_MS,
   FINAL_SYNC_WINDOW_MS,
+  HOST_HANDOFF_AFTER_MS,
   INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
@@ -21,6 +22,7 @@ import {
   MISSION_ID,
   PHASE_COMPLETE_HOLD_MS,
   PLAYER_NAME_MAX_LENGTH,
+  PUZZLE1_COOLDOWN_MS,
   PUZZLE2_COOLDOWNS_MS,
   PUZZLE2_HINT_AFTER_ATTEMPTS,
   ROLE_IDS,
@@ -276,6 +278,17 @@ function everyoneHolding(state: GameState, now: number): boolean {
   })
 }
 
+/** A long-silent host passes the role to the first connected player (any phase). */
+function handOffHostIfGone(state: GameState, now: number): void {
+  const host = state.players.find((p) => p.id === state.hostId)
+  if (!host || host.connected || now - host.lastSeen <= HOST_HANDOFF_AFTER_MS) return
+  const next = state.players.find((p) => p.connected)
+  if (!next) return
+  host.isHost = false
+  next.isHost = true
+  state.hostId = next.id
+}
+
 /** Time-driven transitions. Runs before every command and on the room's alarm. */
 function applyTimers(state: GameState, ctx: EngineContext): GameState | null {
   const { now } = ctx
@@ -291,6 +304,7 @@ function applyTimers(state: GameState, ctx: EngineContext): GameState | null {
     if (state.players.length === 0) return null
     recomputeLobby(state, now)
   }
+  handOffHostIfGone(state, now)
   const elapsed = now - state.phaseStartedAt
   if (state.phase === 'INTRO' && elapsed >= INTRO_DURATION_MS) setPhase(state, 'PUZZLE_1', now)
   if (state.phase === 'PUZZLE_1_COMPLETE' && elapsed >= PHASE_COMPLETE_HOLD_MS) enterPuzzle2(state, ctx)
@@ -309,6 +323,10 @@ export function nextDeadline(state: GameState | null): number | null {
     else if (inLobby(state)) times.push(p.lastSeen + LOBBY_DROP_AFTER_MS + 1)
   }
   if (state.phase === 'INTRO') times.push(state.phaseStartedAt + INTRO_DURATION_MS)
+  const host = state.players.find((p) => p.id === state.hostId)
+  if (host && !host.connected && state.players.some((p) => p.connected)) {
+    times.push(host.lastSeen + HOST_HANDOFF_AFTER_MS + 1)
+  }
   if (state.phase === 'PUZZLE_1_COMPLETE' || state.phase === 'PUZZLE_2_COMPLETE') {
     times.push(state.phaseStartedAt + PHASE_COMPLETE_HOLD_MS)
   }
@@ -540,18 +558,23 @@ function submitPuzzle1(
   now: number,
 ): { state: GameState; result: GameResult } {
   if (state.phase !== 'PUZZLE_1') return { state, result: fail('wrong_phase', 'The breaker puzzle is not active') }
+  const progress = state.puzzles[1]
+  if (progress.retryAt !== undefined && now < progress.retryAt) {
+    return { state, result: fail('cooldown', 'Breaker is resetting', progress.retryAt - now) }
+  }
   const check = checkPuzzle1({ physical: command.physical, scanned: command.scanned, manualCode: command.manualCode })
   if (check.kind === 'invalid') return { state, result: fail('bad_request', check.message) }
-  const progress = state.puzzles[1]
   if (check.kind === 'wrong') {
     progress.attempts += 1
     progress.lastFailure = check.reason
-    emit(state, { type: 'puzzle:failed', puzzle: 1, reason: check.reason }, now)
-    return { state, result: submitResult(state, false, check.reason) }
+    progress.retryAt = now + PUZZLE1_COOLDOWN_MS
+    emit(state, { type: 'puzzle:failed', puzzle: 1, reason: check.reason, retryAfterMs: PUZZLE1_COOLDOWN_MS }, now)
+    return { state, result: submitResult(state, false, check.reason, PUZZLE1_COOLDOWN_MS) }
   }
   progress.solved = true
   progress.verifiedBy = check.verifiedBy
   delete progress.lastFailure
+  delete progress.retryAt
   state.systems.breaker = true
   emit(state, { type: 'puzzle:verified', puzzle: 1, verifiedBy: check.verifiedBy }, now)
   setPhase(state, 'PUZZLE_1_COMPLETE', now)
