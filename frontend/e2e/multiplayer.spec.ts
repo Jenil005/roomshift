@@ -75,7 +75,8 @@ test("two browsers play a full live mission: private clues, rejoin, camera evide
   const apiCalls: string[] = [];
   a.on("request", (r) => r.url().includes("/api/game") && apiCalls.push(r.url()));
 
-  await a.goto("/");
+  // DETECTOR=mediapipe|auto runs the same mission with another detector (default: COCO-SSD).
+  await a.goto(process.env.DETECTOR ? `/?detector=${process.env.DETECTOR}` : "/");
   await expect(a.getByText("ROOMSHIFT · MULTIPLAYER")).toBeVisible();
   await a.getByPlaceholder("Maya").fill("Ana");
   await a.getByRole("button", { name: "Create room" }).click();

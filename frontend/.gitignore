@@ -32,3 +32,4 @@ dist-e2e/
 public/models/
 public/markers/
 public/external/
+public/mediapipe/

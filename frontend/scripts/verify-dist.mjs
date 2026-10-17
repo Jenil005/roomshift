@@ -75,7 +75,16 @@ const model = JSON.parse((await read(dist(`${modelDir}/model.json`))).toString()
 for (const group of model.weightsManifest) for (const p of group.paths) check(await exists(dist(`${modelDir}/${p}`)), `model shard missing ${p}`);
 check(await exists(dist("models/coco-ssd/NOTICE.md")), "model NOTICE missing");
 
-// 7. Printed QR markers for the objects.
+// 7. MediaPipe: WASM byte-identical to the package; model present, hash recorded, notice kept.
+for (const f of ["vision_wasm_internal.js", "vision_wasm_internal.wasm", "vision_wasm_nosimd_internal.js", "vision_wasm_nosimd_internal.wasm"]) {
+  const target = dist(`mediapipe/wasm/${f}`);
+  check((await exists(target)) && sha(await read(target)) === sha(await read(at(`node_modules/@mediapipe/tasks-vision/wasm/${f}`))), `MediaPipe runtime altered or missing: ${f}`);
+}
+check(runtime.sha256["models/mediapipe/efficientdet_lite0_fp16.tflite"] !== undefined, "MediaPipe model hash not recorded");
+check(await exists(dist("models/mediapipe/NOTICE.md")), "MediaPipe model NOTICE missing");
+check(await exists(dist("diagnostics.html")), "diagnostics page missing");
+
+// 8. Printed QR markers for the objects.
 for (const id of ["book", "cup", "keys"]) check(await exists(dist(`markers/${id}.svg`)), `marker missing ${id}.svg`);
 
 if (problems.length) {

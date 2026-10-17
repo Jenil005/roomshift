@@ -32,7 +32,8 @@
       "three/*": ["./node_modules/@types/three/*"],
       "jsqr": ["./node_modules/jsqr"],
       "@tensorflow/*": ["./node_modules/@tensorflow/*"],
-      "@tensorflow-models/*": ["./node_modules/@tensorflow-models/*"]
+      "@tensorflow-models/*": ["./node_modules/@tensorflow-models/*"],
+      "@mediapipe/*": ["./node_modules/@mediapipe/*"]
     }
   },
   "include": ["src"]
