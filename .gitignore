@@ -33,3 +33,7 @@ venv/
 # Temporary
 .tmp/
 tmp/
+
+# Browser test artifacts
+playwright-report/
+test-results/
