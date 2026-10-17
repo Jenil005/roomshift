@@ -1,9 +1,53 @@
-# Netlify builds and publishes the unified browser-based AR application.
+# Netlify publishes the canonical RoomShift game (frontend/) with the unmodified XR Engine,
+# the COCO-SSD model, QR markers and PWA files. The old root AR demo is no longer published.
+# Netlify clones the whole repo, so frontend code can import ../ar, ../shared and ../backend.
 [build]
-  command = "npm run build && npm run check:room-runtime"
+  base = "frontend"
+  command = "npm run build && npm run verify:dist"
   publish = "dist"
 
 [build.environment]
   NODE_VERSION = "22"
+  # Production talks to the real backend (CORS is open on /api/*). No secrets are needed.
+  VITE_GAME_CLIENT = "live"
+  VITE_API_ORIGIN = "https://roomshift.app.space"
 
-# No SPA wildcard rewrite: missing engine JS/WASM must return a real 404.
+# No SPA wildcard redirect: the game has no client routes, and a missing JS, WASM or model
+# file must be a real 404, never index.html with HTTP 200.
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(self), accelerometer=(self), gyroscope=(self), magnetometer=(self), microphone=(), geolocation=()"
+
+# Hashed build output never changes.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Entry points must always be revalidated so a deploy is picked up.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "no-cache"
+
+# Unhashed but versioned by package / content; short browser cache, revalidated after.
+[[headers]]
+  for = "/external/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400"
+[[headers]]
+  for = "/models/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
