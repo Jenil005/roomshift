@@ -59,6 +59,7 @@ export interface Room {
   createdAt: number;
   // Narration is flavor only. Gemini never decides game state; fallback strings always exist.
   narration?: string;
+  narrationSource?: "gemini" | "fallback"; // which produced the current narration line
   hostId: string;
   missionId: string;
   phaseStartedAt: number; // server epoch ms when the current phase began
