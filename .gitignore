@@ -34,3 +34,6 @@ venv/
 .tmp/
 tmp/
 Microsoft/
+
+# Personal Claude Code settings
+.claude/settings.local.json
