@@ -1,2 +1,208 @@
-:root{font-family:'IBM Plex Mono',Consolas,monospace;color:#d9e5ee;background:#050b12;font-synthesis:none;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;font-optical-sizing:auto;font-weight:400;font-size:12px;font-feature-settings:'ss02' on;--cyan:#54efff;--red:#ff5966;--muted:#6c7c8a;--line:rgba(157,195,214,.15);--display:'Barlow Condensed','Arial Narrow',sans-serif}
-*{box-sizing:border-box}html,body,#root{min-width:320px;min-height:100%;margin:0}body{min-height:100vh;background:#050b12}button,input{font:inherit}button{color:inherit}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--cyan);outline-offset:3px}::selection{background:var(--cyan);color:#031016}
+@import "tailwindcss";
+
+/* MGS1 fonts by Andrew Gleeson, CC BY-SA 4.0. Bundled locally so the demo never depends on a font CDN. */
+@font-face {
+  font-family: "MGS1 HUD";
+  src: url("./assets/fonts/MGS1 HUD.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "MGS1 Codec";
+  src: url("./assets/fonts/MGS1 Codec.ttf") format("truetype");
+  font-display: swap;
+}
+/* Ammo only has 0-9 ! / and arrows; anything else (e.g. the ":" in 04:59) falls through to HUD. */
+@font-face {
+  font-family: "MGS1 Ammo";
+  src: url("./assets/fonts/MGS1 Ammo.ttf") format("truetype");
+  font-display: swap;
+}
+@font-face {
+  font-family: "After Burner Neue";
+  src: url("./assets/fonts/after-burner-neue/After Burner Neue.ttf") format("truetype");
+  font-display: swap;
+}
+
+/* Blackout Protocol palette. Amber = failing / waiting on you. Phosphor = confirmed. Fault = defeat only. */
+@theme {
+  --color-bunker: #0F1F17;
+  --color-void: #06110B;
+  --color-inset: #16291D;
+  --color-rule: #1E3727;
+  --color-panel: #2C4A36;
+  --color-bevel: #5E8C66;
+  --color-label: #8FBF94;
+  --color-soft: #B9D6BA;
+  --color-manual: #D8E8C8;
+  --color-phosphor: #7CF29A;
+  --color-phosphor-shine: #C8FFD4;
+  --color-emergency: #FFB23F;
+  --color-emergency-shine: #FFE0A3;
+  --color-emergency-dark: #8A4F12;
+  --color-fault: #E5484D;
+  --color-fault-dark: #5A1416;
+  --font-display: "MGS1 HUD", ui-monospace, monospace;
+  --font-body: "MGS1 Codec", ui-monospace, monospace;
+  --font-numeric: "MGS1 Ammo", "MGS1 HUD", ui-monospace, monospace;
+  --font-title: "After Burner Neue", ui-monospace, monospace;
+}
+
+@utility bevel-raised {
+  border: 3px solid;
+  border-color: var(--color-bevel) var(--color-void) var(--color-void) var(--color-bevel);
+}
+@utility bevel-sunken {
+  border: 3px solid;
+  border-color: var(--color-void) var(--color-bevel) var(--color-bevel) var(--color-void);
+}
+@utility bevel-amber {
+  border: 4px solid;
+  border-color: var(--color-emergency-shine) var(--color-emergency-dark) var(--color-emergency-dark) var(--color-emergency-shine);
+}
+@utility bevel-paper {
+  border: 3px solid;
+  border-color: #ffffff #8a9e7e #8a9e7e #ffffff;
+}
+@utility dither {
+  background-color: var(--color-inset);
+  background-image: conic-gradient(var(--color-rule) 25%, transparent 0 50%, var(--color-rule) 0 75%, transparent 0);
+  background-size: 4px 4px;
+}
+
+html, body, #root { min-height: 100%; }
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--color-bunker);
+  color: var(--color-manual);
+  font-family: var(--font-body);
+  /* The MGS1 fonts ship Regular only; faux bold smears pixel glyphs, so font-bold renders as Regular. */
+  font-synthesis-weight: none;
+  font-size: 22px;
+  line-height: 1.1;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  overflow-x: clip;
+}
+.screen-shell { min-width: 0; padding-top: max(3.25rem, calc(env(safe-area-inset-top) + 42px)); }
+.screen-shell > * { min-width: 0; max-width: 100%; }
+.home-title { font-size: clamp(2.75rem, 15vw, 4rem); line-height: .96; overflow-wrap: anywhere; }
+.role-title { font-size: clamp(2.25rem, 12vw, 3.25rem); overflow-wrap: anywhere; }
+button { cursor: pointer; touch-action: manipulation; }
+button:disabled { cursor: not-allowed; opacity: 0.5; }
+:focus-visible { outline: 3px solid var(--color-phosphor); outline-offset: 2px; }
+
+.scanlines {
+  position: fixed; inset: 0; pointer-events: none; z-index: 50;
+  background: repeating-linear-gradient(to bottom, transparent 0 2px, rgb(0 0 0 / 0.28) 2px 3px);
+}
+.title-layered { text-shadow: 3px 3px 0 var(--color-emergency-dark), 6px 6px 0 var(--color-void); }
+.title-fault { text-shadow: 3px 3px 0 var(--color-fault-dark), 6px 6px 0 var(--color-void); }
+
+@keyframes shake { 0%,100% { transform: translate(0,0) } 25% { transform: translate(-4px,2px) } 50% { transform: translate(4px,-2px) } 75% { transform: translate(-2px,-2px) } }
+.shake { animation: shake 0.3s steps(4) 2; }
+@keyframes reveal { from { opacity: 0 } to { opacity: 1 } }
+.reveal { opacity: 0; animation: reveal 0.01s forwards; }
+@keyframes blink { 50% { opacity: 0.35 } }
+.blink { animation: blink 1s steps(1) infinite; }
+@media (prefers-reduced-motion: reduce) { .shake, .blink { animation: none; } }
+
+.pwa-status {
+  position: fixed;
+  z-index: 60;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(calc(100% - 16px), 448px);
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  border: 2px solid var(--color-bevel);
+  background: var(--color-void);
+  color: var(--color-manual);
+  font: 11px/1.2 var(--font-body);
+  box-shadow: 3px 3px 0 rgb(0 0 0 / 0.7);
+}
+.pwa-signal { flex: 0 0 8px; height: 8px; border-radius: 50%; background: var(--color-phosphor); }
+.pwa-offline { background: var(--color-emergency); }
+.pwa-network { margin-left: auto; color: var(--color-label); font-size: 9px; text-align: right; }
+.pwa-install, .pwa-retry { min-height: 26px; padding: 2px 6px; border: 1px solid var(--color-emergency); background: var(--color-inset); color: var(--color-emergency-shine); font: inherit; font-size: 9px; }
+.pwa-installed { color: var(--color-phosphor); font-size: 9px; }
+@media (max-width: 380px) {
+  .pwa-status { gap: 4px; font-size: 8px; }
+  .pwa-network { font-size: 8px; }
+}
+
+/* Compress tall controls and media on short phones while keeping every action reachable. */
+@media (max-height: 700px) {
+  body { font-size: clamp(16px, 3.2dvh, 21px); }
+  .screen-shell { gap: clamp(6px, 1.4dvh, 10px); padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .screen-shell button { min-height: clamp(48px, 9dvh, 58px); padding-block: 5px; font-size: clamp(16px, 3.7dvh, 22px); }
+  .screen-shell input { min-height: 48px; font-size: clamp(16px, 3.7dvh, 22px); }
+  .screen-shell .home-title { font-size: clamp(2.5rem, 14vw, 3.5rem); line-height: .98; }
+  .screen-shell .camera-view { height: min(32dvh, 220px); min-height: 132px; aspect-ratio: auto; }
+  .screen-shell .sync-action { min-height: clamp(80px, 16dvh, 112px); }
+  .screen-shell .hold-action { height: clamp(104px, 25dvh, 144px); min-height: 104px; }
+  .screen-shell .mission-heading { font-size: clamp(21px, 4.6dvh, 27px); }
+  .screen-shell .player-entry { padding: 8px; }
+  .screen-shell .result-title { font-size: clamp(2.5rem, 12vw, 3.5rem); }
+  .screen-shell .failure-title { font-size: clamp(3.5rem, 18vw, 5rem); }
+}
+@media (max-height: 580px) {
+  .screen-shell { gap: 6px; }
+  .screen-shell .camera-view { height: min(28dvh, 164px); min-height: 120px; }
+  .screen-shell .home-title { font-size: clamp(2.25rem, 13vw, 3.1rem); }
+  .screen-shell .hold-action { height: clamp(96px, 22dvh, 124px); min-height: 96px; }
+}
+
+/* Give the AR view most of the available play area while retaining space for HUD assets. */
+.ar-screen .camera-view {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 260px;
+  aspect-ratio: auto;
+}
+.ar-screen { gap: clamp(3px, .65dvh, 6px); }
+.ar-screen .mission-heading { font-size: clamp(18px, 2.8dvh, 23px); }
+.ar-screen .ar-clue { padding: clamp(5px, 1dvh, 9px); font-size: clamp(14px, 2.2dvh, 17px); line-height: 1.05; }
+.ar-screen .ar-instruction { font-size: clamp(13px, 2dvh, 16px); line-height: 1.04; }
+.ar-screen > .flex-1 { flex: 0 0 0%; }
+.ar-screen > button { min-height: clamp(38px, 6dvh, 48px); padding-block: 3px; font-size: clamp(14px, 2.3dvh, 17px); }
+.ar-screen [aria-label^="Power"] { font-size: clamp(12px, 1.8dvh, 14px); }
+.ar-screen [aria-label^="Power"] > div { height: 12px; }
+@media (max-height: 700px) {
+  .ar-screen { padding-top: max(2.75rem, calc(env(safe-area-inset-top) + 36px)); }
+  .ar-screen .camera-view { min-height: 220px; }
+}
+@media (max-height: 580px) {
+  .ar-screen { padding-top: max(2.5rem, calc(env(safe-area-inset-top) + 34px)); }
+  .ar-screen .camera-view { min-height: 180px; }
+}
+
+.ar-crosshair {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.ar-crosshair::before,
+.ar-crosshair::after {
+  position: absolute;
+  content: "";
+  background: linear-gradient(90deg, transparent, var(--color-phosphor-shine) 22% 43%, transparent 43% 57%, var(--color-phosphor-shine) 57% 78%, transparent);
+  filter: drop-shadow(0 0 3px var(--color-void));
+}
+.ar-crosshair::before { width: 26px; height: 2px; }
+.ar-crosshair::after {
+  width: 2px;
+  height: 26px;
+  background: var(--color-phosphor-shine);
+  filter: drop-shadow(0 0 2px var(--color-void));
+}
+.ar-crosshair-target {
+  display: none;
+}
