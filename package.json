@@ -9,7 +9,13 @@
     "preview": "vite preview --host 0.0.0.0",
     "test": "vitest run",
     "test:browser": "playwright test",
-    "markers": "node ar/scripts/generate-markers.mjs"
+    "markers": "node ar/scripts/generate-markers.mjs",
+    "prepare:ar": "node scripts/prepare-ar.mjs",
+    "predev": "npm run prepare:ar",
+    "prebuild": "npm run prepare:ar",
+    "test:ar": "node --test ar/tests/room-placement.test.mjs",
+    "prepare:room": "node ar/scripts/prepare-room-runtime.mjs",
+    "check:room-runtime": "node ar/scripts/check-room-runtime.mjs"
   },
   "dependencies": {
     "@tensorflow-models/coco-ssd": "^2.2.3",
@@ -18,7 +24,9 @@
     "@tensorflow/tfjs-core": "^4.22.0",
     "jsqr": "^1.4.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "@8thwall/engine-binary": "1.0.0",
+    "three": "0.183.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",
@@ -30,7 +38,8 @@
     "qrcode": "^1.5.4",
     "typescript": "~5.9.3",
     "vite": "^7.1.10",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "@types/three": "^0.170.0"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0"

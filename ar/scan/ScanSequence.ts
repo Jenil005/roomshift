@@ -9,7 +9,11 @@ export const SCAN_DEBOUNCE_MS = 1500;
 export class ScanDebouncer {
   private lastSeen = new Map<MarkerId, number>();
 
-  constructor(private windowMs = SCAN_DEBOUNCE_MS) {}
+  private windowMs: number;
+
+  constructor(windowMs = SCAN_DEBOUNCE_MS) {
+    this.windowMs = windowMs;
+  }
 
   /** True when this sighting counts as a new scan. */
   accept(id: MarkerId, now: number): boolean {

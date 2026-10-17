@@ -57,7 +57,10 @@ export class AiScanSession {
   private qrContext = this.qrCanvas.getContext("2d", { willReadFrequently: true });
   private qrIds: MarkerId[];
 
-  constructor(private detector: ObjectDetector) {
+  private detector: ObjectDetector;
+
+  constructor(detector: ObjectDetector) {
+    this.detector = detector;
     this.qrIds = qrOnlyIds(detector.classMap);
   }
 

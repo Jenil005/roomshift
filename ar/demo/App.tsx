@@ -70,6 +70,7 @@ function Mission({ onReset }: { onReset: () => void }) {
               Three objects. Three clues. One way to bring the facility back
               online.
             </p>
+            <a className="button secondary" href={`${import.meta.env.BASE_URL}ar-room.html`} aria-label="Open life-sized AR facility">EXPLORE 3D FACILITY <ArrowUpRight /></a>
           </div>
           <div className="power-meter">
             <span>POWER CIRCUIT</span>

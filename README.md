@@ -59,3 +59,15 @@ Core loop:
 - Prefer reliability and a complete 2–3 minute judging demo over feature count.
 
 See [`CLAUDE.md`](CLAUDE.md) for engineering context and [`docs/game-flow.md`](docs/game-flow.md) for the game flow.
+
+## Unified AR development
+
+The unified branch is `feature/ar-unified` with a linked AI-first scanner
+(`/`) and a separate life-size virtual facility (`/ar-room.html`).
+
+Existing HTTPS site (redeploy the unified branch before testing):
+https://remarkable-taffy-417014.netlify.app/ar-room.html
+
+See [unified deployment instructions](docs/AR_UNIFIED_DEPLOY.md).
+BOOK and CUP use COCO-SSD, KEYS needs a QR tag; MediaPipe custom-model
+recognition is future work, not yet validated.

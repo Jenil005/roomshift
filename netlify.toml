@@ -1,0 +1,9 @@
+# Netlify builds and publishes the unified browser-based AR application.
+[build]
+  command = "npm run build && npm run check:room-runtime"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# No SPA wildcard rewrite: missing engine JS/WASM must return a real 404.

@@ -37,3 +37,7 @@ tmp/
 # Browser test artifacts
 playwright-report/
 test-results/
+
+# Generated WebAR dependencies (prepared during build)
+ar/public/external/
+ar/public/vendor/

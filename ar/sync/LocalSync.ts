@@ -21,7 +21,17 @@ export class LocalSync implements RoomSync {
   private noticeCbs: ((m: string) => void)[] = [];
   private timer = 0;
 
-  constructor(readonly roomCode: string, readonly isHost: boolean, readonly playerId: string, private name: string) {}
+  readonly roomCode: string;
+  readonly isHost: boolean;
+  readonly playerId: string;
+  private name: string;
+
+  constructor(roomCode: string, isHost: boolean, playerId: string, name: string) {
+    this.roomCode = roomCode;
+    this.isHost = isHost;
+    this.playerId = playerId;
+    this.name = name;
+  }
 
   start() {
     this.ch = new BroadcastChannel(`roomshift-ar-${this.roomCode}`);

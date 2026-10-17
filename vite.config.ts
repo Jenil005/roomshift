@@ -1,4 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({ plugins: [react()], publicDir: "ar/public" });
+export default defineConfig({
+  plugins: [react()],
+  publicDir: "ar/public",
+  server: { watch: { ignored: ["**/ar/public/external/**"] } },
+});
