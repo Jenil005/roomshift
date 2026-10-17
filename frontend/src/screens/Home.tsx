@@ -24,7 +24,7 @@ export function Home() {
       <h1 className="home-title m-0 font-title font-bold text-emergency title-layered">BLACKOUT<br />PROTOCOL</h1>
       <p className="m-0 text-soft">Facility 04 is on reserve power. Get your team in a room.</p>
       <label className="flex flex-col gap-1">
-        <span className="text-label">Callsign</span>
+        <span className="text-label">Call sign</span>
         <input
           value={name}
           onChange={(e) => { setName(e.target.value); setError(null); }}
