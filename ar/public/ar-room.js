@@ -26,6 +26,7 @@ content.add(reticle);
 reticle.visible = false;
 let active = false, running = false, hasRun = false, ready = false, tracking = false;
 let placed = false, powered = false, floorY = null, candidate = null, normalSince = null;
+let stream = null;
 let arCamera = null, previewState = null, watchdog = null, lastFrame = 0, generation = 0;
 const origin = new THREE.Vector3(), direction = new THREE.Vector3();
 const status = (text) => { if ($('status').textContent !== text) $('status').textContent = text; };
@@ -79,6 +80,8 @@ function stopAR(message = 'AR STOPPED', detail = 'Camera released. Reload to sta
   clearInterval(watchdog); watchdog = null;
   try { window.XR8?.stop(); } catch (error) { console.error('XR8 stop failed', error); }
   resetPlacement();
+  stream?.getTracks().forEach((track) => track.stop());
+  stream = null;
   canvas.hidden = true; calibrate.disabled = true; preview.disabled = false;
   start.disabled = false; start.textContent = hasRun ? 'RELOAD AR' : 'START AR';
   status(message); hint(detail);
@@ -168,7 +171,7 @@ async function startAR() {
           arCamera = camera;
           camera.near = 0.05; camera.far = 40;
           camera.position.set(0, 1.5, 0); camera.lookAt(0, 1.5, -1);
-          XR8.XrController.updateCameraProjectionMatrix({origin: camera.position, facing: camera.quaternion});
+          XR8.XrController.updateCameraProjectionMatrix({origin: camera.position, facing: camera.quaternion, cam: {nearClipPlane: 0.05, farClipPlane: 40}});
           scene.add(content); scene.background = null;
           running = true; lastFrame = performance.now();
           start.disabled = false; start.textContent = 'EXIT AR';
@@ -176,7 +179,14 @@ async function startAR() {
         },
         onUpdate: update,
         onException: (error) => { if (active) fail(error); },
-        onCameraStatusChange: ({status: cameraStatus}) => {
+        onCameraStatusChange: ({status: cameraStatus, stream: acquired}) => {
+          if (!active) { acquired?.getTracks().forEach((track) => track.stop()); return; }
+          if (acquired) {
+            stream = acquired;
+            stream.getTracks().forEach((track) => track.addEventListener('ended', () => {
+              if (active) fail(new Error('Camera stream interrupted.'));
+            }, {once: true}));
+          }
           if (active && cameraStatus === 'failed') fail(new Error('Rear camera could not start.'));
         },
       },
@@ -214,10 +224,12 @@ power.addEventListener('click', () => {
   powered = !powered; setPower(powered);
   power.textContent = powered ? 'SIMULATE BLACKOUT' : 'RESTORE POWER';
   status(powered ? 'CORE RESTORED - LOCAL ONLY' : 'CORE OFFLINE - LOCAL ONLY');
+  window.dispatchEvent(new CustomEvent('roomshift:facility-power', {detail: {powered, source: previewState ? 'preview' : '8thwall', localOnly: true}}));
 });
 start.addEventListener('click', () => active ? stopAR() : startAR());
 preview.addEventListener('click', showPreview);
 addEventListener('resize', resize);
+window.visualViewport?.addEventListener('resize', resize);
 addEventListener('pagehide', () => { if (active) stopAR(); disposePreview(); });
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) { if (active) stopAR(); disposePreview(); }

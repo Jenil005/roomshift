@@ -13,7 +13,9 @@
     "prepare:ar": "node scripts/prepare-ar.mjs",
     "predev": "npm run prepare:ar",
     "prebuild": "npm run prepare:ar",
-    "test:ar": "node --test ar/tests/room-placement.test.mjs"
+    "test:ar": "node --test ar/tests/room-placement.test.mjs",
+    "prepare:room": "node ar/scripts/prepare-room-runtime.mjs",
+    "check:room-runtime": "node ar/scripts/check-room-runtime.mjs"
   },
   "dependencies": {
     "@8thwall/engine-binary": "1.0.0",

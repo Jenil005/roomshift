@@ -188,3 +188,9 @@ Official references consulted on 2026-10-17:
 - `git diff --check`: passed. QR implementation files were not edited.
 - HTTPS deployment and physical iPhone tests: **not performed**. Device-dependent
   acceptance criteria remain pending; use the checklist above before release.
+
+## Remote branch integration
+
+The merge preserves the earlier branch history and its [physical device record](IPHONE_TEST_RESULTS.md). The active page uses the manual-calibration implementation in `ar-room.js`, `facility.js`, and `room-placement.js`. Earlier helper modules in `ar/public/room/` and their unit fixtures remain available but are not imported by the active page. `prepare:room` is a compatibility alias for the active asset preparation, and `check:room-runtime` verifies the production runtime and attribution. The earlier attribution page, runtime manifest, camera-track cleanup, viewport resize hook, and local power event are retained in the integrated build.
+
+Integrated-branch validation: 20 Vitest tests, 3 placement tests, and 17 desktop Edge browser tests passed. The final production build and runtime integrity check passed. Physical iPhone testing remains pending.

@@ -40,3 +40,6 @@ test-results/
 
 # Generated self-hosted AR dependencies
 ar/public/external/
+
+# Previous runtime layout retained for compatibility
+ar/public/vendor/

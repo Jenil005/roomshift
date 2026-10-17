@@ -20,6 +20,7 @@ async function mockEngine(page: import('@playwright/test').Page) {
       }}})), 20);
     };
     state.begin = begin;
+    state.cameraStatus = (event: any) => modules.forEach((m) => m.onCameraStatusChange?.(event));
     w.XR8 = {
       loadChunk: async () => {},
       GlTextureRenderer: {pipelineModule: () => ({name: 'feed'})},
@@ -176,4 +177,25 @@ test('late motion permission from an exited attempt cannot start another session
   expect(await page.evaluate(() => (window as any).arTest.runOptions)).toBeNull();
   await page.evaluate(() => (window as any).motionResolvers[1]('granted'));
   await expect(page.locator('#calibrate-floor')).toBeEnabled();
+});
+
+
+test('retained stream cleanup stops current and late camera tracks', async ({page}) => {
+  await mockEngine(page);
+  await page.goto('/ar-room.html');
+  await page.locator('#start-ar').click();
+  await expect(page.locator('#calibrate-floor')).toBeEnabled();
+  await page.evaluate(() => {
+    const state = (window as any).arTest;
+    state.trackStops = 0;
+    state.stream = {getTracks: () => [{stop: () => state.trackStops++, addEventListener: () => {}}]};
+    state.cameraStatus({status:'hasStream', stream:state.stream});
+  });
+  await page.locator('#start-ar').click();
+  expect(await page.evaluate(() => (window as any).arTest.trackStops)).toBe(1);
+  await page.evaluate(() => {
+    const state = (window as any).arTest;
+    state.cameraStatus({status:'hasStream', stream:state.stream});
+  });
+  expect(await page.evaluate(() => (window as any).arTest.trackStops)).toBe(2);
 });
