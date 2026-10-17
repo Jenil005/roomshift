@@ -53,3 +53,6 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run test:ar
+      # tsc over ar/ (all AR modules, including ones only the frontend bundles) + legacy demo build
+      - run: npm run build
+      - run: npm run check:room-runtime
