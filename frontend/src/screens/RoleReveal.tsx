@@ -14,7 +14,7 @@ export function RoleReveal() {
       <p className="m-0 text-soft">{NARRATION.intro}</p>
       <div className="flex flex-col">
         <Label>Your role</Label>
-        <h1 className="role-title m-0 font-display text-[52px] font-bold leading-none">{briefing.title}</h1>
+        <h1 className="role-title m-0 font-display text-[52px] font-bold leading-none text-emergency">{briefing.title}</h1>
       </div>
       <p className="m-0 text-soft">{ROLE_DESCRIPTION[briefing.role]}</p>
       <div className="flex flex-col gap-1 bg-manual p-4 text-bunker bevel-paper">

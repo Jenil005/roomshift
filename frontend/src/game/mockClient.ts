@@ -12,6 +12,9 @@ const MISSION_MS = (DEMO ? 180 : 480) * 1000;
 const PHASE_PAUSE_MS = 2500;
 const BOT_NAMES = ["Dev", "Maya"];
 const ROLE_ORDER: RoleId[] = ["ARCHIVIST", "COURIER", "TIMEKEEPER"];
+const INITIAL_POWER = 15;
+const POWER_AFTER_PUZZLE_1 = 75;
+const POWER_AFTER_PUZZLE_2 = 100;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 const roomCode = () => Array.from({ length: 4 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 31)]).join("");
@@ -84,7 +87,7 @@ export function createMockClient(): GameClient {
     const times = scanners.map((p) => state!.puzzle2Scans[p.id]).filter((t): t is number => typeof t === "number");
     if (times.length < scanners.length) return;
     if (Math.max(...times) - Math.min(...times) <= PUZZLE_2_WINDOW_MS) {
-      update((s) => { s.phase = "PUZZLE_2_COMPLETE"; s.power = 70; s.lastError = null; });
+      update((s) => { s.phase = "PUZZLE_2_COMPLETE"; s.power = POWER_AFTER_PUZZLE_2; s.lastError = null; });
       later(PHASE_PAUSE_MS, () => goTo("FINAL_OVERRIDE"));
     } else {
       update((s) => { s.puzzle2Scans = {}; s.lastError = "Out of sync. Scans must land within 5 seconds."; });
@@ -106,7 +109,7 @@ export function createMockClient(): GameClient {
         selfId = uid();
         const code = action.type === "room:join" ? action.code.toUpperCase() : roomCode();
         state = {
-          roomCode: code, phase: "LOBBY", startedAt: null, deadline: null, completedAt: null, power: 0,
+          roomCode: code, phase: "LOBBY", startedAt: null, deadline: null, completedAt: null, power: INITIAL_POWER,
           players: [{ id: selfId, name: action.name || "Agent", isHost: true, ready: false, connected: true }],
           puzzle2Scans: {}, finalCodeAccepted: false, finalHolding: [], lastError: null,
         };
@@ -141,7 +144,7 @@ export function createMockClient(): GameClient {
           if (state?.phase !== "PUZZLE_1") return;
           const ok = action.result.solved && JSON.stringify(action.result.order) === JSON.stringify(PUZZLE_1_SOLUTION);
           if (ok) {
-            update((s) => { s.phase = "PUZZLE_1_COMPLETE"; s.power = 35; s.lastError = null; });
+            update((s) => { s.phase = "PUZZLE_1_COMPLETE"; s.power = POWER_AFTER_PUZZLE_1; s.lastError = null; });
             later(PHASE_PAUSE_MS, () => goTo("PUZZLE_2"));
           } else {
             update((s) => { s.lastError = "Sequence rejected. Compare your fragments again."; });
@@ -182,7 +185,7 @@ export function createMockClient(): GameClient {
       case "game:reset":
         clearTimers();
         update((s) => {
-          s.phase = "LOBBY"; s.startedAt = null; s.deadline = null; s.completedAt = null; s.power = 0;
+          s.phase = "LOBBY"; s.startedAt = null; s.deadline = null; s.completedAt = null; s.power = INITIAL_POWER;
           s.puzzle2Scans = {}; s.finalCodeAccepted = false; s.finalHolding = []; s.lastError = null;
           s.players.forEach((p) => { p.ready = isBot(p); p.role = undefined; p.introAcked = false; });
         });
@@ -210,7 +213,15 @@ export function createMockClient(): GameClient {
       clearTimers();
       update((s) => {
         s.phase = phase; s.lastError = null; s.puzzle2Scans = {}; s.finalHolding = [];
-        s.power = { PUZZLE_1_COMPLETE: 35, PUZZLE_2: 35, PUZZLE_2_COMPLETE: 70, FINAL_OVERRIDE: 70, COMPLETE: 100 }[phase as string] ?? s.power;
+        s.power = {
+          INTRO: INITIAL_POWER,
+          PUZZLE_1: INITIAL_POWER,
+          PUZZLE_1_COMPLETE: POWER_AFTER_PUZZLE_1,
+          PUZZLE_2: POWER_AFTER_PUZZLE_1,
+          PUZZLE_2_COMPLETE: POWER_AFTER_PUZZLE_2,
+          FINAL_OVERRIDE: POWER_AFTER_PUZZLE_2,
+          COMPLETE: POWER_AFTER_PUZZLE_2,
+        }[phase as string] ?? s.power;
         if (phase === "COMPLETE") s.completedAt = Date.now();
         if (phase === "FINAL_OVERRIDE") s.finalCodeAccepted = false;
       });

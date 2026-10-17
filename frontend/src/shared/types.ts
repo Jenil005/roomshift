@@ -45,7 +45,7 @@ export interface GameState {
   startedAt: number | null;   // ms epoch (server clock)
   deadline: number | null;    // ms epoch (server clock); life bar drains toward this
   completedAt: number | null;
-  power: number;              // 0-100, mission progress
+  power: number;              // 0-100, battery charge / mission progress
   puzzle2Scans: Record<string, number>; // playerId -> ms epoch of their scan
   finalCodeAccepted: boolean;
   finalHolding: string[];     // playerIds currently holding ACTIVATE
