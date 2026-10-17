@@ -72,7 +72,6 @@ $("hostBtn").onclick = () => {
   enter(code, true);
   const guestUrl = `${location.origin}${location.pathname}?room=${code}`;
   toast("Open a second tab to join: " + guestUrl);
-  console.info("Guest tab:", guestUrl);
 };
 $("joinBtn").onclick = () => {
   const code = ($("codeInput") as HTMLInputElement).value.trim().toUpperCase();

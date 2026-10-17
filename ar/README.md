@@ -1,75 +1,91 @@
-# RoomShift physical puzzle
+# RoomShift AR module
 
-The AR module recognizes the supplied QR markers on a book, cup, and set of keys. It draws outlines and names over the camera image and checks the documented **BOOK → CUP → KEYS** arrangement. This is marker-based vision, not arbitrary object recognition or world-anchored 3D tracking.
+The phone-camera side of RoomShift: the physical object puzzle (puzzle 1) and the shared 3D control room for Blackout Protocol. It is marker-based vision, not arbitrary object recognition or world-anchored 3D tracking.
 
-## Solution and scope
+## How the AR room and scanning work
 
-Issue #3 uses `jsQR`, a lightweight JavaScript QR decoder. Printed QR cards are distinct fiducials with corners in camera-image coordinates, so no world tracking, 3D engine, GPU model, or external service is needed. Camera access uses the browser `getUserMedia` API. This is sufficient for projected left-to-right order and leaves multiplayer authority with the backend.
+This section is written for the Devpost write-up. It only states what has been built and tested. Update the "Verification" line after the real-phone test.
 
-## Tags and scanning contract (docs/AR_AGENT.md section 6)
+**Physical puzzle.** Each real object (a book, a cup, a set of keys) carries a printed QR tag. A player points their phone camera at the table. The app decodes the tags on the phone in a background web worker, about 8 frames per second, and never uploads or stores camera images. It finds all three tags in a single frame, sorts them left to right, and asks the team to hold the right arrangement steady for 1.2 seconds. It then sends the tag positions to the RoomShift server. The server re-derives the order from those positions and decides whether the puzzle is solved. The phone never declares a win by itself.
+
+**Fallbacks.** If the camera is blocked, missing, or the page is not on HTTPS, the player gets a clear message and a manual mode, and the server records a manual result as "manual". In dim light the app shows a lighting hint and, on phones that support it, a torch button.
+
+**Shared room.** Every phone renders the same Blackout Protocol control room from one data template using three.js. The breaker lights, the terminal screen and the security door reflect the state the server sends, so all players see the facility come back to life together. Players look around by moving the phone (motion sensors) or by dragging, with a Recenter button.
+
+**Phone care.** The camera is released whenever the scan screen closes or the page is hidden. The room stops rendering while hidden, caps its resolution, and recovers if the phone drops the graphics context. The layout is built for portrait phones down to 320 px wide.
+
+**Why QR tags.** They are reliable on ordinary phones under hackathon time pressure: no machine-learning model, no GPU-heavy vision, no server-side image processing.
+
+**Built with:** TypeScript, React 19, jsQR, three.js, Vite. No API keys or environment variables.
+
+**Verification:** 34 unit tests and 12 browser tests pass in Chrome. The browser tests use a simulated camera and phone-sized screens. The real-phone checklist is in `ar/MANUAL_TEST.md`. **Not yet run on a real phone.**
+
+## Run
+
+From the repository root, use Node.js 22.12+ or 24.
+
+- **Physical puzzle demo:** `npm ci`, then `npm run dev`. Open **Marker cards** (or `ar/print/tags.html`) and print the three tags at actual size.
+- **Shared room demo:** `cd ar`, `npm install`, then `npm run dev`. Tap **Host a room**, then join from a second tab with the 4-letter code or the guest URL in the message. This uses same-browser sync only (see "Shared AR room").
+
+Phones need HTTPS for the camera and motion sensors; a plain `http://` LAN address will not work. Desktop `localhost` counts as secure.
+
+## Physical puzzle details
+
+Select **Enable camera** and allow access. The app requests the rear camera without audio.
+
+- All three tags must be visible, horizontally separated, in roughly the same row, and in the correct order for 1.2 s.
+- Their centers must stay within 0.035 (normalized) of where the hold started. Larger motion restarts the hold; small jitter is tolerated.
+- A missing or duplicate tag, a wrong order, or a gap of more than 500 ms between frames resets the hold.
+- Overlays follow the unmirrored camera image.
+
+The camera is released on completion, stop, mode change, unmount, or a hidden page. After the page is hidden, scanning needs an explicit restart.
+
+If access is denied, the camera is unavailable, or tracking is unreliable, use **Manual demo**. It labels the result as manual and does not claim to verify physical objects.
+
+### Tags and scanning contract (docs/AR_AGENT.md section 6)
 
 1. **Tag payload:** exactly `roomshift:v1:<objectId>`, where `<objectId>` is one of `OBJECT_IDS` in `shared/constants` (`book`, `cup`, `keys`). Anything else, including the old `ROOMSHIFT:BOOK` cards and wrong-case ids, is ignored without an error (`scan/tagPayload.ts`). Reprint old cards.
-2. **Worker decoding:** `scan/CameraScanSession.ts` captures frames (max 960 px wide, about 8 per second, one frame in flight) and decodes them with jsQR in `scan/decodeWorker.ts`. If the worker cannot start, it decodes on the main thread. jsQR is kept rather than `qr-scanner` because the arrangement check needs every card in one frame, and `qr-scanner` returns one code per frame.
-3. **`ScanSession`** (`types.ts`), implemented by `CameraScanSession`: `start(video)`, `stop()`, `onScan(id)`, `onError({ code })` with `denied | no-camera | insecure-context | unknown`. Extras: `onMarkers(markers, now)` for the arrangement check, `onEnded("hidden" | "track-ended")`, `torchSupported()` and `setTorch(on)`. The camera is released on `stop()`, when the page is hidden, and when the track ends.
+2. **Worker decoding:** `scan/CameraScanSession.ts` captures frames (max 960 px wide, about 8 per second, one frame in flight) and decodes them with jsQR in `scan/decodeWorker.ts`. If the worker cannot start, it decodes on the main thread. jsQR is used rather than `qr-scanner` because the arrangement check needs every tag in one frame, and `qr-scanner` returns one code per frame.
+3. **`ScanSession`** (`types.ts`), implemented by `CameraScanSession`: `start(video)`, `stop()`, `onScan(id)`, `onError({ code })` with `denied | no-camera | insecure-context | unknown`. Extras: `onMarkers(markers, now)` for the arrangement check, `onEnded("hidden" | "track-ended")`, `torchSupported()` and `setTorch(on)`.
 4. **Debounce:** `onScan` fires once per tag sighting. A tag is ignored until it has been out of view for 1.5 s (`ScanDebouncer`). Each accepted scan vibrates where supported (Android).
 5. **`ScanSequence`:** `append(id)` (repeats ignored), `clear()`, `current()`. `PhysicalPuzzle` shows it and reports it through `onScanSequence`.
 6. **Printable tags:** `ar/print/tags.html` (7 cm QR per object with a large label). Regenerate it and `ar/public/markers/*.svg` with `npm run markers`.
 
-What to send in `puzzle:submit` (see `checkPuzzle1` on `feature/backend`): prefer `physical` = the `onResult` value (the server sorts marker centers itself and requires a 1.2 s hold), else `scanned` = the scan sequence, else `manualCode` (for example `BCK`). Never send a local `solved` as proof.
+### Result and submission
 
-Implementation, types, demo UI, assets, generation script, and tests live under `ar/`. Root package/build files provide the runnable harness because the repository previously contained only placeholders. No backend or shared files are changed.
-
-## Run and play
-
-From the repository root, use Node.js 22.12+ or 24:
-
-```sh
-npm ci
-npm run dev
-```
-
-Open the running application, select **Marker cards**, and print the three cards at actual size. Put each marker on its matching object. Keep the white QR borders intact. Position the objects side by side with the marker faces pointed toward the camera. Rotate the phone to landscape if needed to fit the row.
-
-Select **Enable camera** and allow access. The app requests the rear camera without audio. All three markers must be visible, horizontally separated, in roughly the same row, and correctly ordered for 1.2 seconds. Their normalized center positions must stay within 0.035 of the positions at the beginning of that hold; larger motion resets the timer, while small tracking jitter is tolerated. Missing/duplicate markers, a wrong order, or a gap over 500 ms resets the hold. Overlays follow the unmirrored camera image. The app releases camera tracks on completion, stop, mode change, unmount, or a hidden page. Returning to a hidden page requires an explicit restart.
-
-Mobile camera access requires an HTTPS deployment; an ordinary HTTP LAN address will not work. Desktop loopback is also a browser-supported secure context. No API keys are needed. Frames stay in the browser and are not uploaded or stored.
-
-If access is denied, the camera is unavailable, or tracking is unreliable, use **Manual demo**. It checks the entered order and explicitly identifies the result as manual; it does not claim to verify physical objects.
-
-## Integration
-
-`PhysicalPuzzle` in `ar/PhysicalPuzzle.tsx` provides the camera/manual UI and calls `onResult(result)` after the local check. Import `ar/demo/styles.css` for its current presentation. The surrounding app owns mission transitions. Mount a fresh component for each puzzle attempt.
-
-The exported `PhysicalPuzzleResult` contract lives in `ar/types.ts` so other teams can consume it without changing shared files:
+`PhysicalPuzzle` calls `onResult(result)` once, after the local check passes. The `PhysicalPuzzleResult` type lives in `ar/types.ts`:
 
 ```ts
 {
   solved: true,
-  markers: detections,                // { id, center: { x, y }, corners: [...] }[]
+  markers: detections,                  // { id, center: { x, y }, corners: [...] }[]
   detectedIds: ['book', 'cup', 'keys'], // camera discovery order, not spatial order
   order: ['book', 'cup', 'keys'],       // left to right
-  source: 'camera',                   // or 'manual'
+  source: 'camera',                     // or 'manual'
   heldForMs: 1200
 }
 ```
 
-Manual submissions have `markers: []`, `detectedIds: []` and `heldForMs: 0`. The current frontend shows a **local puzzle result only**. There is no multiplayer backend yet. When integrating DeepSpace, submit this evidence with authenticated room/player context to the authoritative server. The server must validate the current phase, expected order, required participants, and whether manual submissions are allowed. Client evidence is not tamper-proof and must not authorize a mission win on its own.
+Manual results have `markers: []`, `detectedIds: []` and `heldForMs: 0`.
 
-`detectMarkers` is independent of React and accepts RGBA frame pixels. It searches overlapping vertical regions to avoid mixing finder patterns from multiple QR codes, then masks decoded regions to avoid duplicate reads. Separate physical cards carrying the same ID remain separate detections and are rejected by the validator. Processing is limited to 960 pixels wide, at most eight decoded QR codes per frame, and approximately eight scans per second, in a web worker. Camera focus, lighting, perspective, and device speed still affect reliability.
+What to send in `puzzle:submit` (see `checkPuzzle1` in the backend and `docs/game-api.md`):
+1. Prefer `physical` = the `onResult` value. The server sorts marker centers itself and requires a 1.2 s hold; it ignores the client's `solved`, `order` and `detectedIds`.
+2. Otherwise `scanned` = the scan sequence.
+3. Otherwise `manualCode` (for example `BCK`).
 
-`PhysicalOrderTracker` is also UI-independent. It accepts normalized detections and a monotonic timestamp. Use `toCameraResult` to get a serializable result on any frame, including `solved: false` before the full hold:
+Client evidence is not tamper-proof and never authorizes a win on its own.
+
+`detectMarkers` (no React) accepts RGBA frame pixels. It searches overlapping vertical strips so finder patterns from neighbouring QR codes don't mix, then masks each decoded code to avoid reading it twice. Two physical cards with the same id stay separate detections, and the validator rejects them. Limits: 960 px wide, at most eight codes per frame, about eight frames per second. Camera focus, lighting, perspective and device speed still affect reliability.
+
+`PhysicalOrderTracker` (no React) takes normalized detections and a monotonic timestamp. `toCameraResult` gives a serializable result on any frame, including `solved: false` before the hold completes:
 
 ```ts
 import { detectMarkers, PhysicalOrderTracker, toCameraResult } from './ar';
 
-const tracker = new PhysicalOrderTracker(); // retain one tracker per scan session
+const tracker = new PhysicalOrderTracker(); // one tracker per scan session
 const markers = detectMarkers(rgbaPixels, width, height);
 const result = toCameraResult(markers, tracker.update(markers, performance.now()));
-// Forward result through your existing room action transport when appropriate.
-// Reset tracker when the puzzle attempt or camera session changes.
 ```
-
-The component calls `onResult` once on successful camera verification. Manual mode sends a separately tagged submission. These APIs can support future cooperative object targets without coupling camera processing to game state.
 
 ## Frontend integration
 
@@ -114,62 +130,50 @@ useEffect(() => {
 }, [room]);
 // <canvas ref={canvas} /> plus a "Motion" button calling scene.current?.controls.enableGyro()
 // (iOS needs a tap) and a "Recenter" button calling scene.current?.controls.recenter().
+// After enableGyro(), show a message for scene.current.controls.gyroStatus (see demo/main.ts).
 ```
 
 `room.systems` and `room.version` from `useRoomView` have exactly the shape `RoomScene.applyState` takes. Taps (`scene.onInteract`) are hints only: the server changes `systems` through the puzzles, never through a tap.
 
-```sh
-npm test
-npm run build
-npm run test:browser
-```
-
-Browser tests use a system Chromium at `/usr/bin/chromium` if present. On Windows, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the installed Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`). Else install the Playwright browser with `npx playwright install chromium`; `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select another executable. Tests cover real QR raster decoding, missing/duplicate/wrong markers, temporal stability, permission errors, manual validation, simulated live-camera verification, track cleanup, and mobile layout. Simulated camera tests do not replace a real-device trial on iOS Safari and Android Chrome.
-
-The printable SVGs (`ar/public/markers/`) and `ar/print/tags.html` are checked in. Regenerate them with `npm run markers` if the marker format changes. `qrcode` is a development dependency used to generate these assets and test inputs; it is not shipped in the application bundle.
-
-## Real-phone test procedure (not yet performed)
-
-1. Run `npm ci` and `npm run build`. Serve the generated `dist/` directory from an HTTPS static host with a certificate trusted by the phone. Alternatively, use a trusted HTTPS development tunnel to the Vite server. Open that HTTPS address in current iOS Safari or Android Chrome; plain HTTP over a LAN does not grant camera access.
-2. Open **Marker cards** and print all three at actual size. Cut outside the white quiet zone. Attach them to BOOK, CUP, and KEYS with the marker faces pointing toward the camera. Use even lighting and keep the cards separated in a single row.
-3. Tap **Enable camera**, grant permission, and confirm the rear-camera feed is visible. Confirm outlines and the BOOK/CUP/KEYS badges correspond to the actual cards. Check landscape and portrait orientation.
-4. Start with a wrong order. All three cards should be detected, but the puzzle must remain unsolved. Hide a card and confirm its badge clears and progress resets. Add a duplicate card and confirm the duplicate warning.
-5. Arrange **BOOK → CUP → KEYS**. Move a card or the phone enough to shift the projected position while keeping the same order; the hold must reset. Then keep all cards steady for 1.2 seconds. Confirm the puzzle completes once and the camera indicator turns off.
-6. Reset the puzzle. Deny camera permission, test permission recovery using browser settings, and try the **Manual demo**. A correct manual arrangement must be labeled manual, with no claim of camera verification.
-7. Start scanning and switch apps or lock the phone. Return and confirm scanning is paused and requires an explicit restart. Also check **Stop camera**, switching modes, and a second puzzle attempt.
-8. Record phone model, OS/browser version, lighting, print size, camera orientation, time to detect all cards, and pass/fail observations. Test at least one iPhone and one Android phone before describing the feature as phone-validated.
-
-Current validation is automated QR-image decoding and Chromium browser tests using a simulated camera stream. **No real-phone or multiplayer testing has been performed.**
-
 ## Shared AR room (Blackout Protocol)
 
-Restored from `roomshift-ar.zip`; the 3D room lives alongside the marker puzzle above and has its own harness in `ar/` (`npm install && npm run build` / `npm run dev`, entry `ar/index.html` → `demo/main.ts`).
-A shared virtual room, not a live camera view. Both devices build the same room from one
-template (`templates/blackoutProtocol.ts`) and render the same synced state. A phone acts as a
-window: move it (gyro) or drag to look around.
+A shared virtual room, not a live camera view. Every device builds the same room from one template (`templates/blackoutProtocol.ts`) and renders the same synced state. The phone acts as a window: move it (motion sensors) or drag to look around.
 
-### Run
-1. `cd ar && npm install && npm run dev`
-2. Open the printed URL, tap **Host a room**.
-3. Open the guest URL (shown in the toast and console) in a second tab. Both tabs show the same room.
-4. Tap the bobbing diamond: breaker, then terminal, then door. The orb is the other player's view direction.
+1. `templates/`: pure-data room definitions (one template per mission).
+2. `room/RoomScene.ts`: three.js scene with `applyState(state)`, `setPeers(list)`, `onInteract(cb)`, `start()` and `dispose()`. It renders only while started and the page is visible.
+3. `room/LookControls.ts`: motion and drag look. iOS needs HTTPS and a button tap; `gyroStatus` says why motion is off.
+4. `sync/RoomSync.ts`: the network interface the standalone demo uses.
+5. `sync/LocalSync.ts`: same-browser test sync (BroadcastChannel). It never connects two phones.
+6. `sync/rules.ts`: demo-only gating used by `LocalSync`. The real rules live in the backend.
 
-### Architecture
-1. `templates/` pure-data room definitions (add a template per mission)
-2. `room/RoomScene.ts` three.js scene: `applyState(state)`, `setPeers(list)`, `onInteract(cb)`
-3. `room/LookControls.ts` gyro and drag look (iOS needs HTTPS and a button tap)
-4. `sync/RoomSync.ts` the only network interface the scene sees
-5. `sync/LocalSync.ts` same-browser test sync (BroadcastChannel). Not for real phones
-6. `sync/rules.ts` demo-only gating. Real rules belong in the DeepSpace backend
+In the real app the room is fed straight from the server's room state (see "Frontend integration"), so no extra sync class is needed. A `DeepSpaceSync` implementing `RoomSync` would only be needed to show where other players are looking (the peer orbs), and that needs a presence channel.
 
-### Wiring DeepSpace (next step)
-Write `DeepSpaceSync implements RoomSync`:
-1. `onState`: subscribe to the room's `RoomState` record
-2. `interact`: send a request to the backend; the server validates and updates state
-3. `sendPresence` / `onPeers`: map to DeepSpace presence, throttled to ~10 Hz
-4. Replace `new LocalSync(...)` in `demo/main.ts` (or the real app) with it
+Known limits:
+1. Not yet viewed on a real phone. Expect to tune `TUNING` in `RoomScene.ts` (light brightness) on a phone.
+2. The starting direction depends on how the phone is held when Motion is tapped; players should tap Recenter.
+3. Room geometry is simple primitives.
 
-### Known limits
-1. Typechecked and built, but not yet viewed on a real device. Expect to tune `TUNING` in `RoomScene.ts` (light brightness) on a phone
-2. Phone motion needs HTTPS: DeepSpace's `*.app.space` deploy provides it
-3. Room geometry is simple primitives; swap in a GLB model later if time allows
+## Checks
+
+```sh
+npm test               # unit tests (vitest), from the repository root
+npm run build          # repository root: puzzle demo
+npm run test:browser   # Playwright browser tests
+cd ar && npm run build # shared room demo
+```
+
+Browser tests use a system Chromium at `/usr/bin/chromium` if present. On Windows, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the installed Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`). Otherwise install the Playwright browser with `npx playwright install chromium`.
+
+The tests cover:
+- real QR image decoding, and missing, duplicate and wrong markers
+- hold stability, permission errors and manual validation
+- simulated live-camera verification and camera release
+- the room view at 320 px: toolbar, paused rendering, WebGL context loss, iOS-safe form controls
+
+Simulated tests do not replace the real-phone checklist in `ar/MANUAL_TEST.md`.
+
+The printable SVGs (`ar/public/markers/`) and `ar/print/tags.html` are checked in. `qrcode` is a development dependency used to generate them and the test images; it is not shipped in the app bundle.
+
+## Environment variables
+
+None. The AR module uses no API keys or secrets. Camera images never leave the phone.
