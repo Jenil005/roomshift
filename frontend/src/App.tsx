@@ -11,7 +11,7 @@ import { Complete } from "./screens/Complete";
 import { Failed } from "./screens/Failed";
 import { DevPanel } from "./dev/DevPanel";
 
-const showDev = new URLSearchParams(window.location.search).has("dev") && import.meta.env.VITE_GAME_CLIENT !== "deepspace";
+const showDev = import.meta.env.VITE_GAME_CLIENT !== "deepspace";
 
 /** The server's phase decides the screen. Clients never advance the game themselves. */
 function Router() {

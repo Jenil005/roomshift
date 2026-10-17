@@ -8,6 +8,14 @@ const PHASES: Phase[] = ["LOBBY", "INTRO", "PUZZLE_1", "PUZZLE_1_COMPLETE", "PUZ
 export function DevPanel() {
   const client = useGameClient();
   return (
+    <>
+      <button
+        type="button"
+        onClick={() => devJump(client, "FAILED")}
+        className="fixed bottom-12 left-2 z-[60] border-2 border-fault bg-void px-3 py-2 font-display text-[14px] text-fault"
+      >
+        DEV: SHOW GAME OVER
+      </button>
     <select
       aria-label="Jump to phase"
       defaultValue=""
@@ -17,5 +25,6 @@ export function DevPanel() {
       <option value="">dev: jump…</option>
       {PHASES.map((p) => <option key={p} value={p}>{p}</option>)}
     </select>
+    </>
   );
 }
