@@ -17,20 +17,37 @@ export class LookControls {
   private orient = { alpha: 0, beta: 0, gamma: 0 };
   private drag: { x: number; y: number } | null = null;
 
-  constructor(private camera: THREE.PerspectiveCamera, dom: HTMLElement) {
+  constructor(private camera: THREE.PerspectiveCamera, private dom: HTMLElement) {
     this.camera.rotation.order = "YXZ";
     dom.style.touchAction = "none";
-    dom.addEventListener("pointerdown", (e) => {
-      this.drag = { x: e.clientX, y: e.clientY };
-    });
-    window.addEventListener("pointerup", () => (this.drag = null));
-    window.addEventListener("pointermove", (e) => {
-      if (!this.drag || this.gyroActive) return;
-      this.yaw += (e.clientX - this.drag.x) * 0.005;
-      this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch + (e.clientY - this.drag.y) * 0.005));
-      this.drag = { x: e.clientX, y: e.clientY };
-    });
+    dom.addEventListener("pointerdown", this.onDown);
+    window.addEventListener("pointerup", this.onUp);
+    window.addEventListener("pointermove", this.onMove);
   }
+
+  // Remove every listener so the view can be unmounted and remounted in a single-page app.
+  dispose() {
+    this.dom.removeEventListener("pointerdown", this.onDown);
+    window.removeEventListener("pointerup", this.onUp);
+    window.removeEventListener("pointermove", this.onMove);
+    window.removeEventListener("deviceorientation", this.onOrient);
+    this.gyroActive = false;
+  }
+
+  private onDown = (e: PointerEvent) => {
+    this.drag = { x: e.clientX, y: e.clientY };
+  };
+
+  private onUp = () => {
+    this.drag = null;
+  };
+
+  private onMove = (e: PointerEvent) => {
+    if (!this.drag || this.gyroActive) return;
+    this.yaw += (e.clientX - this.drag.x) * 0.005;
+    this.pitch = Math.max(-1.4, Math.min(1.4, this.pitch + (e.clientY - this.drag.y) * 0.005));
+    this.drag = { x: e.clientX, y: e.clientY };
+  };
 
   async enableGyro(): Promise<boolean> {
     const D = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };

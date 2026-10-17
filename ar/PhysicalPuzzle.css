@@ -1,0 +1,383 @@
+/* Styles for <PhysicalPuzzle>, scoped to .scanner-panel so it drops into any app
+   without restyling the page. Generated from ar/demo/styles.css; edit here from now on. */
+.scanner-panel {
+  --muted: #a2afa0;
+  --lime: #d3f88a;
+  --line: #334033;
+  color: #e8eee5;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 400;
+  color-scheme: dark;
+}
+.scanner-panel *,
+.scanner-panel *::before,
+.scanner-panel *::after {
+  box-sizing: border-box;
+}
+.scanner-panel button,
+.scanner-panel select {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+.scanner-panel button {
+  border: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.scanner-panel button:focus-visible,
+.scanner-panel select:focus-visible {
+  outline: 3px solid var(--lime);
+  outline-offset: 5px;
+}
+.scanner-panel button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+.scanner-panel h2,
+.scanner-panel h3,
+.scanner-panel p {
+  margin: 0;
+}
+.scanner-panel .eyebrow {
+  font-family: monospace;
+  font-size: 10px;
+  letter-spacing: 1.8px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: var(--muted);
+}
+.scanner-panel .eyebrow > span {
+  margin: 0 10px;
+  color: #5b7057;
+}
+.scanner-panel {
+  background: #18221a;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.scanner-panel .panel-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 26px 18px;
+  gap: 12px;
+}
+.scanner-panel .panel-heading h2 {
+  font-size: 23px;
+  letter-spacing: -0.8px;
+  font-weight: 500;
+  margin-top: 4px;
+}
+.scanner-panel .status-tag {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #40503a;
+  border-radius: 20px;
+  padding: 7px 9px;
+  font: 9px monospace;
+  letter-spacing: 1px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.scanner-panel .status-tag > span {
+  width: 5px;
+  height: 5px;
+  background: #83917b;
+  border-radius: 50%;
+}
+.scanner-panel .status-tag.live {
+  color: var(--lime);
+}
+.scanner-panel .status-tag.live > span {
+  background: var(--lime);
+}
+.scanner-panel .mode-switch {
+  display: flex;
+  padding: 0 26px 17px;
+  gap: 7px;
+}
+.scanner-panel .mode-switch button {
+  font-size: 11px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  border-radius: 6px;
+  padding: 8px 11px;
+}
+.scanner-panel .mode-switch button[aria-pressed="true"] {
+  background: #2d3b29;
+  color: #e8eee5;
+  border-color: #47533b;
+}
+.scanner-panel .camera-stage {
+  position: relative;
+  background: #0b120e;
+  min-height: 310px;
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+  border-top: 1px solid #2d3a2b;
+  border-bottom: 1px solid #2d3a2b;
+}
+.scanner-panel .camera-stage:not(.is-live) {
+  background-image:
+    linear-gradient(#273b2829 1px, transparent 1px),
+    linear-gradient(90deg, #273b2829 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+.scanner-panel .camera-stage.is-live {
+  min-height: 0;
+}
+.scanner-panel .camera-stage video {
+  display: block;
+  width: 100%;
+  height: auto;
+  grid-area: 1/1;
+}
+.scanner-panel .camera-stage:not(.is-live) video {
+  visibility: hidden;
+  height: 310px;
+}
+.scanner-panel .camera-placeholder {
+  grid-area: 1/1;
+  position: relative;
+  text-align: center;
+  padding: 32px;
+  max-width: 440px;
+  margin: auto;
+}
+.scanner-panel .scan-symbol {
+  font-size: 38px;
+  color: var(--lime);
+  line-height: 1;
+  margin-bottom: 18px;
+}
+.scanner-panel .camera-placeholder h3 {
+  font-size: 21px;
+  font-weight: 450;
+  letter-spacing: -0.5px;
+}
+.scanner-panel .camera-placeholder p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.7;
+  margin: 12px 0 22px;
+}
+.scanner-panel .button {
+  border-radius: 7px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  padding: 12px 17px;
+  font-size: 12px;
+  font-weight: 600;
+  min-height: 43px;
+}
+.scanner-panel .primary {
+  color: #182111;
+  background: var(--lime);
+}
+.scanner-panel .primary:hover {
+  background: #e1ffad;
+}
+.scanner-panel .marker-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.scanner-panel .marker-overlay polygon {
+  fill: #c8fc6626;
+  stroke: var(--lime);
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+.scanner-panel .marker-overlay text {
+  font: 700 27px monospace;
+  fill: white;
+  stroke: #101711;
+  stroke-width: 6;
+  paint-order: stroke;
+}
+.scanner-panel .camera-caption {
+  position: absolute;
+  bottom: 13px;
+  left: 15px;
+  right: 15px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 8px monospace;
+  letter-spacing: 1px;
+  color: white;
+  text-shadow: 0 1px 3px black;
+}
+.scanner-panel .camera-caption span {
+  padding: 5px;
+  background: #101711b3;
+  border-radius: 4px;
+}
+.scanner-panel .scan-feedback {
+  padding: 22px 26px;
+}
+.scanner-panel .marker-list {
+  display: flex;
+  gap: 9px;
+}
+.scanner-panel .marker-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  border: 1px solid #354332;
+  border-radius: 7px;
+  padding: 11px 12px;
+  font: 11px monospace;
+  color: #a6b39e;
+}
+.scanner-panel .marker-chip small {
+  color: #65765f;
+  font-size: 9px;
+}
+.scanner-panel .marker-chip > span {
+  margin-left: auto;
+}
+.scanner-panel .marker-chip.detected {
+  border-color: #86ad55;
+  color: var(--lime);
+  background: #273520;
+}
+.scanner-panel .guidance {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 18px 0 12px;
+  min-height: 18px;
+  line-height: 1.6;
+}
+.scanner-panel .progress-track {
+  height: 3px;
+  border-radius: 4px;
+  background: #33412d;
+  overflow: hidden;
+}
+.scanner-panel .progress-track > div {
+  background: var(--lime);
+  height: 100%;
+  transition: width 0.12s linear;
+}
+.scanner-panel .text-button {
+  background: transparent;
+  color: var(--lime);
+  text-decoration: underline;
+  font-size: 12px;
+  padding: 14px 0 0;
+  min-height: 42px;
+}
+.scanner-panel .error-message {
+  background: #402d22;
+  color: #ffcfab;
+  margin: 16px 26px 0;
+  padding: 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.scanner-panel .manual-panel {
+  padding: 28px 26px 32px;
+  border-top: 1px solid var(--line);
+  min-height: 410px;
+}
+.scanner-panel .manual-panel h3 {
+  font-size: 26px;
+  font-weight: 450;
+  margin: 12px 0;
+}
+.scanner-panel .manual-panel > p {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+.scanner-panel .manual-slots {
+  display: flex;
+  gap: 12px;
+  margin-top: 28px;
+}
+.scanner-panel .manual-slots label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 9px;
+  color: #c0ceba;
+  font-size: 12px;
+}
+.scanner-panel .manual-slots select {
+  width: 100%;
+  background: #101711;
+  color: #edf5e6;
+  border: 1px solid #526247;
+  border-radius: 7px;
+  padding: 13px 8px;
+  font-size: 12px;
+}
+.scanner-panel .manual-panel .manual-message {
+  color: #ffcfab;
+  min-height: 28px;
+  margin: 15px 0 10px;
+}
+@media (max-width: 1050px) {
+  .scanner-panel .marker-chip {
+      gap: 7px;
+      padding: 10px 8px;
+  }
+}
+@media (max-width: 760px) {
+  .scanner-panel .panel-heading {
+      padding: 21px 18px 16px;
+  }
+  .scanner-panel .mode-switch {
+      padding-left: 18px;
+  }
+  .scanner-panel .scan-feedback {
+      padding: 20px 18px;
+  }
+  .scanner-panel .camera-stage {
+      min-height: 270px;
+  }
+  .scanner-panel .camera-stage:not(.is-live) video {
+      height: 300px;
+  }
+  .scanner-panel .camera-placeholder {
+      padding: 26px 20px;
+  }
+  .scanner-panel .camera-caption {
+      font-size: 7px;
+  }
+  .scanner-panel .manual-panel {
+      padding: 25px 18px;
+  }
+  .scanner-panel .manual-slots {
+      gap: 8px;
+  }
+  .scanner-panel .manual-slots select {
+      padding: 13px 5px;
+      font-size: 11px;
+  }
+  .scanner-panel .error-message {
+      margin: 16px 18px 0;
+  }
+}
+.scanner-panel .scan-sequence {
+  font: 11px monospace;
+  color: var(--lime);
+  margin: 14px 0 0;
+}
+.scanner-panel .scan-sequence .text-button {
+  padding: 0 0 0 8px;
+  min-height: 0;
+}

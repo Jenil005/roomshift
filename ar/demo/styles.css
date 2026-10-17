@@ -184,121 +184,6 @@ h1 em {
 .vision-column {
   min-width: 0;
 }
-.scanner-panel {
-  background: #18221a;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.panel-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 24px 26px 18px;
-  gap: 12px;
-}
-.panel-heading h2 {
-  font-size: 23px;
-  letter-spacing: -0.8px;
-  font-weight: 500;
-  margin-top: 4px;
-}
-.status-tag {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  border: 1px solid #40503a;
-  border-radius: 20px;
-  padding: 7px 9px;
-  font: 9px monospace;
-  letter-spacing: 1px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-.status-tag > span {
-  width: 5px;
-  height: 5px;
-  background: #83917b;
-  border-radius: 50%;
-}
-.status-tag.live {
-  color: var(--lime);
-}
-.status-tag.live > span {
-  background: var(--lime);
-}
-.mode-switch {
-  display: flex;
-  padding: 0 26px 17px;
-  gap: 7px;
-}
-.mode-switch button {
-  font-size: 11px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--muted);
-  border-radius: 6px;
-  padding: 8px 11px;
-}
-.mode-switch button[aria-pressed="true"] {
-  background: #2d3b29;
-  color: #e8eee5;
-  border-color: #47533b;
-}
-.camera-stage {
-  position: relative;
-  background: #0b120e;
-  min-height: 310px;
-  display: grid;
-  align-items: center;
-  overflow: hidden;
-  border-top: 1px solid #2d3a2b;
-  border-bottom: 1px solid #2d3a2b;
-}
-.camera-stage:not(.is-live) {
-  background-image:
-    linear-gradient(#273b2829 1px, transparent 1px),
-    linear-gradient(90deg, #273b2829 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-.camera-stage.is-live {
-  min-height: 0;
-}
-.camera-stage video {
-  display: block;
-  width: 100%;
-  height: auto;
-  grid-area: 1/1;
-}
-.camera-stage:not(.is-live) video {
-  visibility: hidden;
-  height: 310px;
-}
-.camera-placeholder {
-  grid-area: 1/1;
-  position: relative;
-  text-align: center;
-  padding: 32px;
-  max-width: 440px;
-  margin: auto;
-}
-.scan-symbol {
-  font-size: 38px;
-  color: var(--lime);
-  line-height: 1;
-  margin-bottom: 18px;
-}
-.camera-placeholder h3 {
-  font-size: 21px;
-  font-weight: 450;
-  letter-spacing: -0.5px;
-}
-.camera-placeholder p {
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.7;
-  margin: 12px 0 22px;
-}
 .button {
   border-radius: 7px;
   display: inline-flex;
@@ -325,109 +210,6 @@ h1 em {
 }
 .secondary:hover {
   background: #293626;
-}
-.marker-overlay {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.marker-overlay polygon {
-  fill: #c8fc6626;
-  stroke: var(--lime);
-  stroke-width: 3;
-  vector-effect: non-scaling-stroke;
-}
-.marker-overlay text {
-  font: 700 27px monospace;
-  fill: white;
-  stroke: #101711;
-  stroke-width: 6;
-  paint-order: stroke;
-}
-.camera-caption {
-  position: absolute;
-  bottom: 13px;
-  left: 15px;
-  right: 15px;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font: 8px monospace;
-  letter-spacing: 1px;
-  color: white;
-  text-shadow: 0 1px 3px black;
-}
-.camera-caption span {
-  padding: 5px;
-  background: #101711b3;
-  border-radius: 4px;
-}
-.scan-feedback {
-  padding: 22px 26px;
-}
-.marker-list {
-  display: flex;
-  gap: 9px;
-}
-.marker-chip {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex: 1;
-  border: 1px solid #354332;
-  border-radius: 7px;
-  padding: 11px 12px;
-  font: 11px monospace;
-  color: #a6b39e;
-}
-.marker-chip small {
-  color: #65765f;
-  font-size: 9px;
-}
-.marker-chip > span {
-  margin-left: auto;
-}
-.marker-chip.detected {
-  border-color: #86ad55;
-  color: var(--lime);
-  background: #273520;
-}
-.guidance {
-  font-size: 12px;
-  color: var(--muted);
-  margin: 18px 0 12px;
-  min-height: 18px;
-  line-height: 1.6;
-}
-.progress-track {
-  height: 3px;
-  border-radius: 4px;
-  background: #33412d;
-  overflow: hidden;
-}
-.progress-track > div {
-  background: var(--lime);
-  height: 100%;
-  transition: width 0.12s linear;
-}
-.text-button {
-  background: transparent;
-  color: var(--lime);
-  text-decoration: underline;
-  font-size: 12px;
-  padding: 14px 0 0;
-  min-height: 42px;
-}
-.error-message {
-  background: #402d22;
-  color: #ffcfab;
-  margin: 16px 26px 0;
-  padding: 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  line-height: 1.5;
 }
 .setup-strip {
   display: flex;
@@ -541,49 +323,6 @@ footer {
 .footer-separator {
   margin: 0 12px;
 }
-.manual-panel {
-  padding: 28px 26px 32px;
-  border-top: 1px solid var(--line);
-  min-height: 410px;
-}
-.manual-panel h3 {
-  font-size: 26px;
-  font-weight: 450;
-  margin: 12px 0;
-}
-.manual-panel > p {
-  font-size: 13px;
-  line-height: 1.7;
-  color: var(--muted);
-}
-.manual-slots {
-  display: flex;
-  gap: 12px;
-  margin-top: 28px;
-}
-.manual-slots label {
-  display: flex;
-  flex: 1;
-  min-width: 0;
-  flex-direction: column;
-  gap: 9px;
-  color: #c0ceba;
-  font-size: 12px;
-}
-.manual-slots select {
-  width: 100%;
-  background: #101711;
-  color: #edf5e6;
-  border: 1px solid #526247;
-  border-radius: 7px;
-  padding: 13px 8px;
-  font-size: 12px;
-}
-.manual-panel .manual-message {
-  color: #ffcfab;
-  min-height: 28px;
-  margin: 15px 0 10px;
-}
 .success-panel {
   min-height: 552px;
   border: 1px solid #657e46;
@@ -694,194 +433,147 @@ footer {
 }
 @media (min-width: 1500px) {
   .app-shell {
-    padding: 0 70px;
+      padding: 0 70px;
   }
 }
 @media (max-width: 1050px) {
   .app-shell {
-    padding: 0 28px;
+      padding: 0 28px;
   }
   .mission-grid {
-    grid-template-columns: minmax(0, 1fr) 280px;
-    gap: 20px;
+      grid-template-columns: minmax(0, 1fr) 280px;
+      gap: 20px;
   }
   .clue-panel {
-    padding: 20px;
+      padding: 20px;
   }
   .setup-strip {
-    flex-wrap: wrap;
+      flex-wrap: wrap;
   }
   .setup-strip > div {
-    flex: 1;
+      flex: 1;
   }
   .setup-strip .button {
-    margin-left: 38px;
+      margin-left: 38px;
   }
   .power-meter {
-    display: none;
-  }
-  .marker-chip {
-    gap: 7px;
-    padding: 10px 8px;
+      display: none;
   }
 }
 @media (max-width: 760px) {
   .app-shell {
-    padding: 0 20px;
+      padding: 0 20px;
   }
   .site-header {
-    height: 80px;
+      height: 80px;
   }
   .wordmark {
-    font-size: 20px;
+      font-size: 20px;
   }
   .brand-symbol {
-    width: 28px;
-    height: 28px;
-    font-size: 25px;
+      width: 28px;
+      height: 28px;
+      font-size: 25px;
   }
   .session-badge {
-    font-size: 8px;
-    letter-spacing: 0.7px;
-    gap: 6px;
+      font-size: 8px;
+      letter-spacing: 0.7px;
+      gap: 6px;
   }
   .mission-heading {
-    padding: 34px 0 28px;
+      padding: 34px 0 28px;
   }
   h1 {
-    letter-spacing: -1.3px;
+      letter-spacing: -1.3px;
   }
   .intro {
-    font-size: 13px;
+      font-size: 13px;
   }
   .mission-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-  }
-  .panel-heading {
-    padding: 21px 18px 16px;
-  }
-  .mode-switch {
-    padding-left: 18px;
-  }
-  .scan-feedback {
-    padding: 20px 18px;
+      grid-template-columns: 1fr;
+      gap: 10px;
   }
   .clue-panel {
-    padding: 25px;
+      padding: 25px;
   }
   .clue-heading h2 {
-    font-size: 26px;
+      font-size: 26px;
   }
   .clue-card {
-    margin-top: 20px;
+      margin-top: 20px;
   }
   .clue-card h3 {
-    font-size: 20px;
-  }
-  .camera-stage {
-    min-height: 270px;
-  }
-  .camera-stage:not(.is-live) video {
-    height: 300px;
-  }
-  .camera-placeholder {
-    padding: 26px 20px;
-  }
-  .camera-caption {
-    font-size: 7px;
+      font-size: 20px;
   }
   .setup-strip .button {
-    margin: 0 0 0 38px;
-  }
-  .manual-panel {
-    padding: 25px 18px;
-  }
-  .manual-slots {
-    gap: 8px;
-  }
-  .manual-slots select {
-    padding: 13px 5px;
-    font-size: 11px;
-  }
-  .error-message {
-    margin: 16px 18px 0;
+      margin: 0 0 0 38px;
   }
   footer {
-    flex-direction: column;
-    gap: 7px;
-    margin-top: 30px;
+      flex-direction: column;
+      gap: 7px;
+      margin-top: 30px;
   }
   .print-cards {
-    grid-template-columns: 1fr;
+      grid-template-columns: 1fr;
   }
   .print-cards article {
-    max-width: 350px;
-    margin: auto;
-    width: 100%;
+      max-width: 350px;
+      margin: auto;
+      width: 100%;
   }
   .print-toolbar {
-    font-size: 12px;
+      font-size: 12px;
   }
   .success-panel {
-    min-height: 500px;
+      min-height: 500px;
   }
 }
 @media (prefers-reduced-motion: reduce) {
   * {
-    transition: none !important;
+      transition: none !important;
   }
 }
 @media print {
   @page {
-    size: A4 landscape;
-    margin: 15mm;
+      size: A4 landscape;
+      margin: 15mm;
   }
   :root {
-    color-scheme: light;
-    background: white;
-    color: black;
+      color-scheme: light;
+      background: white;
+      color: black;
   }
   .print-page {
-    padding: 0;
-    max-width: none;
+      padding: 0;
+      max-width: none;
   }
   .print-toolbar {
-    display: none;
+      display: none;
   }
   .print-page h1 {
-    font-size: 25px;
-    letter-spacing: -0.8px;
+      font-size: 25px;
+      letter-spacing: -0.8px;
   }
   .print-page > p {
-    font-size: 11px;
+      font-size: 11px;
   }
   .print-cards {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10mm;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10mm;
   }
   .print-cards article {
-    width: 70mm;
-    padding: 5mm;
+      width: 70mm;
+      padding: 5mm;
   }
   .print-cards img {
-    width: 55mm;
-    height: 55mm;
-    margin: 3mm auto;
+      width: 55mm;
+      height: 55mm;
+      margin: 3mm auto;
   }
   .print-note {
-    color: #444;
+      color: #444;
   }
   .eyebrow {
-    color: #555;
+      color: #555;
   }
-}
-.scan-sequence {
-  font: 11px monospace;
-  color: var(--lime);
-  margin: 14px 0 0;
-}
-.scan-sequence .text-button {
-  padding: 0 0 0 8px;
-  min-height: 0;
 }

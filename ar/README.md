@@ -71,7 +71,52 @@ const result = toCameraResult(markers, tracker.update(markers, performance.now()
 
 The component calls `onResult` once on successful camera verification. Manual mode sends a separately tagged submission. These APIs can support future cooperative object targets without coupling camera processing to game state.
 
-## Checks
+## Frontend integration
+
+Two entry points, both React 19 compatible:
+
+| Import | What | Needs |
+|---|---|---|
+| `ar` (`ar/index.ts`) | `PhysicalPuzzle` (loads its own scoped `PhysicalPuzzle.css`), `CameraScanSession`, `ScanSequence`, tag helpers, types | `react`, `jsqr` |
+| `ar/room` (`ar/room/index.ts`) | `RoomScene`, `blackoutProtocol`, `LookControls`, `RoomSync`, `LocalSync`, room types | `three` |
+
+**Required in the consuming app's `vite.config.ts`:** `resolve: { dedupe: ["react", "react-dom"] }`. Without it, files under `ar/` resolve a second copy of React and `PhysicalPuzzle` crashes with `Cannot read properties of null (reading 'useState')` (verified with an outside test build).
+
+**Puzzle 1 screen** (`room.phase === "PUZZLE_1"`), sketch:
+
+```tsx
+const [attempt, setAttempt] = useState(0);
+const submit = async (physical: PhysicalPuzzleResult) => {
+  const res = await gameRequest<{ solved: boolean; reason?: string; retryAfterMs?: number }>(
+    { type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 1, physical } },
+    session,
+  );
+  if (res.ok && res.data.solved) return; // the server moves every phone to PUZZLE_1_COMPLETE
+  // Show res.data.reason / res.message, then mount a fresh puzzle for the next try.
+  setTimeout(() => setAttempt((n) => n + 1), (res.ok ? res.data.retryAfterMs : res.retryAfterMs) ?? 0);
+};
+return <PhysicalPuzzle key={attempt} onResult={submit} />;
+```
+
+**Room view** (any phase from INTRO to COMPLETE), sketch:
+
+```tsx
+const canvas = useRef<HTMLCanvasElement>(null);
+const scene = useRef<RoomScene | null>(null);
+useEffect(() => {
+  const s = new RoomScene(canvas.current!, blackoutProtocol);
+  s.start();
+  scene.current = s;
+  return () => s.dispose(); // releases listeners and the WebGL context
+}, []);
+useEffect(() => {
+  if (room) scene.current?.applyState({ version: room.version, systems: room.systems });
+}, [room]);
+// <canvas ref={canvas} /> plus a "Motion" button calling scene.current?.controls.enableGyro()
+// (iOS needs a tap) and a "Recenter" button calling scene.current?.controls.recenter().
+```
+
+`room.systems` and `room.version` from `useRoomView` have exactly the shape `RoomScene.applyState` takes. Taps (`scene.onInteract`) are hints only: the server changes `systems` through the puzzles, never through a tap.
 
 ```sh
 npm test

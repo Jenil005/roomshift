@@ -93,17 +93,25 @@ export class RoomScene {
     this.buildProps();
     this.scene.add(this.ambient);
 
-    canvas.addEventListener("pointerdown", (e) => (this.down = { x: e.clientX, y: e.clientY }));
-    canvas.addEventListener("pointerup", (e) => {
-      if (!this.down) return;
-      const moved = Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y);
-      this.down = null;
-      if (moved <= 8) this.pick(e);
-    });
-    new ResizeObserver(() => this.resize()).observe(canvas);
+    canvas.addEventListener("pointerdown", this.onPointerDown);
+    canvas.addEventListener("pointerup", this.onPointerUp);
+    this.resizeObserver.observe(canvas);
     this.resize();
     this.applyState(this.state);
   }
+
+  private resizeObserver = new ResizeObserver(() => this.resize());
+
+  private onPointerDown = (e: PointerEvent) => {
+    this.down = { x: e.clientX, y: e.clientY };
+  };
+
+  private onPointerUp = (e: PointerEvent) => {
+    if (!this.down) return;
+    const moved = Math.hypot(e.clientX - this.down.x, e.clientY - this.down.y);
+    this.down = null;
+    if (moved <= 8) this.pick(e);
+  };
 
   onInteract(cb: (id: SystemId) => void) { this.interactCb = cb; }
 
@@ -111,7 +119,26 @@ export class RoomScene {
 
   start() { this.renderer.setAnimationLoop((time) => this.frame(time)); }
 
-  dispose() { this.renderer.setAnimationLoop(null); this.renderer.dispose(); }
+  // Release everything this scene holds so a single-page app can unmount and remount it.
+  // Phones allow only a few live WebGL contexts, so the context is released explicitly.
+  dispose() {
+    this.renderer.setAnimationLoop(null);
+    this.resizeObserver.disconnect();
+    this.canvas.removeEventListener("pointerdown", this.onPointerDown);
+    this.canvas.removeEventListener("pointerup", this.onPointerUp);
+    this.controls.dispose();
+    this.scene.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      mesh.geometry?.dispose();
+      const mats = Array.isArray(mesh.material) ? mesh.material : mesh.material ? [mesh.material] : [];
+      mats.forEach((m) => {
+        (m as THREE.MeshStandardMaterial).map?.dispose();
+        m.dispose();
+      });
+    });
+    this.renderer.dispose();
+    this.renderer.forceContextLoss();
+  }
 
   applyState(state: RoomState) {
     this.state = state;

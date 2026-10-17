@@ -15,6 +15,7 @@ import {
 } from "./physicalOrder";
 import { ScanSequence } from "./scan/ScanSequence";
 import { useCameraScanner } from "./useCameraScanner";
+import "./PhysicalPuzzle.css";
 
 const EMPTY_READING: OrderReading = {
   status: "incomplete",
