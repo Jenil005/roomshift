@@ -33,18 +33,23 @@
       button, .link { font-size: 10px; padding: 10px; min-height: 40px; }
       .tip { font-size: 11px; }
     }
+  [hidden] { display: none !important; }
+    .legal a { color: #d3f88a; pointer-events: auto; }
+    #calibration { background: #061419ed; padding: 8px; border-radius: 8px; align-items: center; font-size: 12px; }
+    input { width: 75px; padding: 8px; font-size: 16px; }
+    @media (max-height: 500px) { .bottom { gap: 4px; } .tip { margin: 0; padding: 6px; } .legal { font-size: 8px; } #overlay { padding-top: 6px; padding-bottom: 6px; overflow-y: auto; } }
   </style>
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+        "three": "./external/three/build/three.module.js",
+        "three/addons/": "./external/three/addons/"
       }
     }
   </script>
 </head>
 <body>
-  <div id="viewport" aria-label="3D preview or immersive AR scene"></div>
+  <div id="viewport" aria-label="3D preview or camera AR scene"><canvas id="camerafeed" hidden></canvas></div>
   <div id="overlay">
     <div class="row">
       <div class="brand">ROOMSHIFT<small>BLACKOUT PROTOCOL / ROOM-SCALE AR</small></div>
@@ -52,17 +57,18 @@
     </div>
     <div class="bottom">
       <p id="instructions" class="tip">Place a life-size research facility on your real floor, then walk around inside it. No printed markers are used.</p>
+      <div id="calibration" class="buttons" hidden><label>Camera height above floor (meters) <input id="camera-height" type="number" min="0.3" max="2.5" step="0.01" value="1.40" inputmode="decimal"></label><button id="calibrate-floor" disabled>CALIBRATE FLOOR</button></div>
       <div class="buttons">
-        <button id="start-ar" class="primary">START AR</button>
+        <button id="start-ar" class="primary" disabled>START AR</button>
         <button id="place-room" disabled>PLACE ROOM</button>
         <button id="reset-room" disabled>MOVE ROOM</button>
         <button id="restore-power" disabled>RESTORE POWER</button>
         <button id="preview-room">3D PREVIEW</button>
         <a class="link" href="/">QR PUZZLE ↗</a>
       </div>
-      <div class="legal">3.4m × 3.4m × 2.5m · MARKERLESS FLOOR TRACKING · KEEP YOUR REAL SURROUNDINGS VISIBLE · HTTPS ON PHONE</div>
+      <div class="legal">3.4 m &times; 3.4 m &times; 2.5 m &middot; MANUAL FLOOR CALIBRATION &middot; iPHONE TESTING PENDING<br>XR Engine by Niantic Spatial, Inc. Copyright &copy; 2026 Niantic Spatial, Inc. All rights reserved. Licensed under the <a href="./external/xr/LICENSE" target="_blank" rel="noopener">XR Engine License Agreement (including warranty disclaimer)</a>. Provided as is, without warranties. <a href="./external/three/LICENSE" target="_blank" rel="noopener">Three.js license</a>.</div>
     </div>
   </div>
-  <script type="module" src="/ar-room.js"></script>
+  <script type="module" src="./ar-room.js"></script>
 </body>
 </html>

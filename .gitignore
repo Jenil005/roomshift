@@ -37,3 +37,6 @@ tmp/
 # Browser test artifacts
 playwright-report/
 test-results/
+
+# Generated self-hosted AR dependencies
+ar/public/external/

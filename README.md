@@ -17,6 +17,10 @@ Use Node.js 22.12+ or 24. Select **Marker cards** in the app to print the BOOK, 
 
 Validation: `npm test`, `npm run build`, and `npm run test:browser`.
 
+## Experimental iPhone room-scale AR
+
+On `feature/ar-ios`, open `/ar-room.html` for the separate 8th Wall SLAM / Three.js facility prototype. It uses no printed markers, has manual floor calibration, and keeps Restore Power local. **Physical iPhone testing is pending.** See [deployment, licensing, and the device test checklist](ar/ROOM_SCALE_AR.md).
+
 ## MVP: Blackout Protocol
 
 Players must restore power to a locked-down research facility before the timer expires.
