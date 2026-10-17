@@ -100,3 +100,35 @@ test.describe("physical puzzle on a small phone", () => {
     ).toBe(true);
   });
 });
+
+test("RoomScene.stop() pauses rendering during scanning and start() resumes it", async ({ page }) => {
+  await page.goto(ROOM_URL);
+  await page.evaluate(async () => {
+    const { RoomScene, blackoutProtocol } = await import("/ar/room/index.ts" as string);
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = 200;
+    document.body.append(canvas);
+    const scene = new RoomScene(canvas, blackoutProtocol);
+    (window as typeof window & { scene: unknown }).scene = scene;
+    scene.start();
+  });
+  type Scene = Record<string, () => void> & { renderer: { info: { render: { frame: number } } } };
+  const scene = (fn: (s: Scene) => unknown) =>
+    page.evaluate(`(${fn.toString()})(window.scene)`);
+  // Renders of this scene only (the demo page has its own scene).
+  const rendersDuring = async (ms: number) => {
+    const before = (await scene((s) => s.renderer.info.render.frame)) as number;
+    await page.waitForTimeout(ms);
+    return ((await scene((s) => s.renderer.info.render.frame)) as number) - before;
+  };
+  expect(await rendersDuring(500)).toBeGreaterThan(5);
+  await scene((s) => s.stop());
+  await page.waitForTimeout(100); // let an in-flight frame finish
+  expect(await rendersDuring(500)).toBe(0);
+  // A visibility change while stopped must not restart the loop.
+  await setHidden(page, true);
+  await setHidden(page, false);
+  expect(await rendersDuring(500)).toBe(0);
+  await scene((s) => s.start());
+  expect(await rendersDuring(500)).toBeGreaterThan(5);
+});

@@ -125,6 +125,13 @@ export class RoomScene {
     this.syncLoop();
   }
 
+  /** Pauses rendering (for example while the AI scanner runs); start() resumes it. */
+  stop() {
+    this.running = false;
+    document.removeEventListener("visibilitychange", this.syncLoop);
+    this.syncLoop();
+  }
+
   private running = false;
 
   private syncLoop = () => {

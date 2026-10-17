@@ -21,6 +21,7 @@ What can be tested today:
 | Room sync between phones | `DeepSpaceSync` (Task A3) | **Blocked** until A3 is done. |
 | QR tag scanning, `roomshift:v1:<id>` | `CameraScanSession`, shown in `PhysicalPuzzle.tsx` | Yes, on each phone separately (local result only). |
 | Marker order puzzle | `PhysicalPuzzle.tsx` | Yes, on each phone separately (local result only). |
+| AI Scanner (COCO-SSD book + cup, QR keys) | `AiScanner.tsx`, `detect/` | Yes, on each phone separately (section E, local result only). |
 
 ## A. Shared AR room, one phone (possible after the build is fixed)
 
@@ -71,6 +72,24 @@ What can be tested today:
 33. Deny the camera. The error message appears, and **Manual demo** works and is labelled manual.
 34. Start scanning, switch apps, and come back. Scanning is paused and needs an explicit restart.
 
+## E. AI Scanner on iPhone Safari (one phone; not yet run on any real phone)
+
+Use the same HTTPS URL as above, on Wi-Fi the first time (the model is about 18 MB). Put a real book (cover facing the camera, upright or tilted towards the phone), a mug or cup, and the keys with their printed KEYS QR tag in one row on a table.
+
+35. Open the puzzle page. **AI scanner** is selected. "INITIALIZING AI" and a spinner appear, then "CAMERA READY" and **Start AI camera**. Write down the load time. The camera must not open before you tap.
+36. Tap **Start AI camera** and allow access. The rear camera preview plays inline (not fullscreen) with no sound prompt, and the header shows "AI LIVE".
+37. Point at the book and cup. Boxes appear on the real objects with labels like "BOOK 52%" and "CUP 91%". Boxes line up with the objects in portrait. Write down the ms value in the bottom-right caption (inference time per frame).
+38. Before the KEYS tag is visible, the KEYS chip reads **NEEDS QR TAG** and the puzzle never solves, even with book and cup in the right order for 10 s.
+39. Show the KEYS QR tag in the same view. The KEYS chip reads **QR**, and with BOOK → CUP → KEYS held steady the status goes "HOLD STEADY", the bar fills, and the puzzle solves. The success panel shows "BOOK · AI / CUP · AI / KEYS · QR".
+40. Put a second cup in view. The status reads "DUPLICATE OBJECT" and the puzzle does not solve.
+41. Point at things that are not puzzle objects (a laptop, a person). They are drawn dimmed with their class name, and the status says "OBJECT NOT RECOGNIZED".
+42. Note how the book is recognized: flat on the table, upright, partly covered, in dim light. COCO-SSD lite is weakest on books; record what works for the demo.
+43. Lock the phone during scanning, then unlock. "Camera paused…" appears and **Restart AI camera** works. The camera indicator turned off while locked.
+44. While AI is live, tap **QR backup**. The camera indicator turns off. Tap **Enable camera** and the QR scanner works as in section D. Switch back to **AI scanner**: it is ready at once (no second model load).
+45. Scan for 2 minutes. Note whether the phone gets warm and whether the ms caption grows.
+46. Turn on airplane mode, clear website data, and reload. The AI scanner fails to load and **Switch to QR backup** appears. (Or on a slow connection: after 15 s the same button appears while loading continues.)
+47. Add the page to the Home Screen (Share → Add to Home Screen), open it from there, and repeat 35–39. Note any difference from Safari, especially camera permission prompts.
+
 ## Run sheet
 
 | # | Phone (model / OS / browser) | Result | Notes (time to detect, lighting, distance) |
@@ -81,5 +100,7 @@ What can be tested today:
 ## HTTPS route
 
 **Recommended: deploy to DeepSpace.** Open `https://roomshift.app.space` (or the AR page path once it is included in the DeepSpace app build). It has a trusted certificate, so there are no browser warnings and iOS motion works. Both phones reach the backend on the same origin, and the guest Wi-Fi does not matter.
+
+**The AI model files** (`ar/public/models/coco-ssd/`, 17.5 MB) must be deployed with the app at `/models/coco-ssd/ssdlite_mobilenet_v2/`. Check that `https://<host>/models/coco-ssd/ssdlite_mobilenet_v2/model.json` opens in the phone's browser before testing section E.
 
 **For quick single-phone checks during development:** run the Vite dev server over self-signed HTTPS on the LAN, or use a tunnel. Both need extra setup, which is described in the A1 report. Campus or hackathon Wi-Fi often blocks phone-to-laptop traffic, so use a phone hotspot if the page does not load. Self-signed certificates show a warning page on each phone that you must accept, and iOS can be inconsistent with them.

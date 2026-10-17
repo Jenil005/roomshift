@@ -35,8 +35,8 @@ If `ar/` is missing in your worktree, stop and tell the human to unzip `roomshif
 ## 4. Hard rules
 
 1. **Never decide outcomes.** Scanning an object or a local "solved" value is only for instant UI feedback. The server validates every submission. Treat the backend as the only source of truth for state and puzzle results.
-2. **Phone-side processing only.** No heavy models, no GPU-dependent CV, no server-side image processing. The dev laptop is an i7-6500U with 12 GB RAM, and judges will use ordinary phones.
-3. **Reliability over cleverness.** QR codes are the primary physical input. Do not add object detection, ML or markerless tracking unless the human explicitly asks.
+2. **Phone-side processing only.** No server-side image processing and no local model training. The dev laptop is an i7-6500U with 12 GB RAM, and judges will use ordinary phones. The only model is COCO-SSD `lite_mobilenet_v2`, running in the phone's browser (TensorFlow.js WebGL).
+3. **Reliability over cleverness.** The human explicitly authorized ML object detection (AI object detection task, 2026-10-17): the **AI scanner** (COCO-SSD for book and cup, QR tag for keys) is the default physical input. **QR remains the backup** and must always be able to complete the puzzle on its own, and the manual fallback stays. Do not add markerless tracking or other models unless the human asks.
 4. **Minimal dependencies.** Prefer what is already installed. Any new package needs a one-line justification in your report.
 5. **Mobile first.** Every feature must work on a real phone in portrait. Cap pixel ratio at 2. Pause rendering when the tab is hidden. Keep the bundle small.
 6. **No secrets in code.** Use environment variables.
@@ -54,8 +54,9 @@ If `ar/` is missing in your worktree, stop and tell the human to unzip `roomshif
 5. Keep the tap-to-interact hints, but the backend decides what each tap does.
 6. Verify on a real phone over HTTPS before calling the motion controls done (see section 8).
 
-## 6. Physical puzzle input (QR scanning)
+## 6. Physical puzzle input (AI scanner first, QR backup)
 
+0. **AI object detection is authorized** (AI object detection task, 2026-10-17) and is the default mode: on-device COCO-SSD detects BOOK and CUP; COCO-SSD has no keys class, so KEYS is read from its QR tag in the same frame. AI alone must never complete the puzzle, each object records its evidence source (`ai`, `qr`, `manual`), the model is self-hosted and lazy-loaded, and a load failure or a load over 15 s offers QR Backup. **QR scanning below remains the backup** and must keep working unchanged. Details: `ar/README.md`, "AI object detection".
 1. Use a lightweight QR library that runs in a web worker (such as `qr-scanner`). Do not depend on the browser's native `BarcodeDetector`; iOS support is unconfirmed.
 2. **Tag format:** each object has a QR tag whose payload is exactly `roomshift:v1:<objectId>` where `<objectId>` is one of `OBJECT_IDS` in `shared/constants` (`book`, `cup`, `keys`). Reject anything else without crashing.
 3. Expose a clean interface:
