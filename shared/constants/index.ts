@@ -14,6 +14,12 @@ export const PLAYER_NAME_MAX_LENGTH = 20;
 export const OBJECT_IDS = ["book", "cup", "keys"] as const;
 // Camera evidence must show the arrangement held steady this long (matches ar/physicalOrder.ts).
 export const PUZZLE1_HOLD_MS = 1_200;
+// Short pause after a wrong puzzle 1 attempt so a submit loop cannot flood the room.
+export const PUZZLE1_COOLDOWN_MS = 1_000;
+
+// If the host is disconnected this long, the host role passes to a connected player
+// (host-only controls such as reset and final:force must never become unreachable).
+export const HOST_HANDOFF_AFTER_MS = 30_000;
 
 // Placeholder role names: rename freely. Roles must differ per player (asymmetric clues).
 export const ROLE_IDS = ["engineer", "analyst", "operator", "scout"] as const;

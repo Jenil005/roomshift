@@ -31,6 +31,7 @@ export type GameErrorCode =
   | "wrong_phase"
   | "not_enough_players"
   | "cooldown"
+  | "rate_limited" // too many requests; wait retryAfterMs
   | "not_implemented"
   | "server_error";
 
