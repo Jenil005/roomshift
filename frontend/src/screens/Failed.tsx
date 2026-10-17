@@ -29,6 +29,7 @@ export function Failed() {
   const { state, send } = useGame();
   if (!state) return null;
   const at = (s: number) => ({ animationDelay: `${s}s` });
+  const followupAt = at(5.4);
 
   return (
     <div className="min-h-dvh bg-void">
@@ -47,12 +48,12 @@ export function Failed() {
           </div>
         </div>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
-          <div className="reveal" style={at(5.2)}>
-            <h1 className="failure-title m-0 text-center font-display text-[84px] font-bold leading-[0.88] tracking-[4px] text-fault title-fault" style={at(5.2)}>GAME<br />OVER</h1>
+          <div className="after-radio" style={followupAt}>
+            <h1 className="failure-title m-0 text-center font-display text-[84px] font-bold leading-[0.88] tracking-[4px] text-fault title-fault">GAME<br />OVER</h1>
           </div>
-          <p className="reveal m-0 text-center text-soft" style={at(5.7)}>{NARRATION.failed} Power peaked at {state.power}%.</p>
+          <p className="after-radio m-0 text-center text-soft" style={followupAt}>{NARRATION.failed} Power peaked at {state.power}%.</p>
         </div>
-        <div className="reveal flex flex-col gap-2" style={at(6.1)}>
+        <div className="after-radio flex flex-col gap-2" style={followupAt}>
           <button onClick={() => send({ type: "game:reset" })} className="flex min-h-14 items-center gap-3 bg-panel px-4 text-left font-display text-[26px] font-bold bevel-raised">
             <span aria-hidden className="text-fault">▶</span>Continue
           </button>
