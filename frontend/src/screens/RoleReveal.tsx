@@ -1,5 +1,5 @@
 import { useGame } from "../game/GameProvider";
-import { NARRATION } from "../game/content";
+import { NARRATION, ROLE_DESCRIPTION } from "../game/content";
 import { Button, Label, Screen } from "../ui/kit";
 
 export function RoleReveal() {
@@ -16,6 +16,7 @@ export function RoleReveal() {
         <Label>Your role</Label>
         <h1 className="role-title m-0 font-display text-[52px] font-bold leading-none">{briefing.title}</h1>
       </div>
+      <p className="m-0 text-soft">{ROLE_DESCRIPTION[briefing.role]}</p>
       <div className="flex flex-col gap-1 bg-manual p-4 text-bunker bevel-paper">
         <span className="font-display text-[18px] text-panel">Your fragment</span>
         <p className="m-0 text-[32px] leading-none">{briefing.puzzle1Clue}</p>

@@ -8,9 +8,14 @@ export const PUZZLE_2_WINDOW_MS = 5000;
 export const OBJECT_LABEL: Record<ObjectId, string> = { BOOK: "Book", CUP: "Cup", KEYS: "Keys" };
 
 const ROLE_TITLE: Record<RoleId, string> = {
-  ARCHIVIST: "Archivist",
-  COURIER: "Courier",
-  TIMEKEEPER: "Timekeeper",
+  ARCHIVIST: "Field Engineer",
+  COURIER: "Signal Analyst",
+  TIMEKEEPER: "Relay Operator",
+};
+export const ROLE_DESCRIPTION: Record<RoleId, string> = {
+  ARCHIVIST: "Rebuild the physical power circuit.",
+  COURIER: "Decode encrypted clues hidden throughout the environment.",
+  TIMEKEEPER: "Trace unstable energy signals and synchronize the final override.",
 };
 
 /**

@@ -22,7 +22,7 @@ export function Puzzle1() {
 
   return (
     <Screen className="ar-screen">
-      <MissionHeader step="Puzzle 1 of 3" title="Physical order" />
+      <MissionHeader step="Puzzle 1 of 3" title="Physical order" role={briefing.title} />
       <p className="ar-clue m-0 bg-inset p-3 bevel-sunken">
         <span className="text-label">Your fragment: </span>{briefing.puzzle1Clue}
       </p>
