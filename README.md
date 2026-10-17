@@ -42,9 +42,9 @@ Core loop:
 ## Team
 
 - **Jenil Patel** — Project Lead / Integration / AI / Deployment
-- **UF CS sophomore #1** — Full-Stack / DeepSpace / Multiplayer
-- **UF CS sophomore #2** — AR / Vision Developer (learning role)
-- **Optional 4th member** — Frontend / UI / Game Experience
+- **Reagan Crockett** — Front End / UI / React / UX
+- **Ryan Ngo** — Front End / UI / Testing 
+- **Andel Budinich** — AR / Asset Creation / Game Experience
 
 ## Priority
 
