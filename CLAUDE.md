@@ -7,9 +7,9 @@ Build a polished SwampHacks XII MVP that proves this promise:
 
 ## Current Team
 1. **Jenil Patel** — Project Lead / Integration. Own architecture, Claude orchestration, Gemini, deployment, Git integration, QA, demo, Devpost.
-2. **UF CS sophomore #1** — Full-Stack / DeepSpace. Own multiplayer rooms, authoritative game state, synchronization, reconnect behavior, backend integration.
-3. **UF CS sophomore #2** — AR / Vision Developer, currently learning. Own browser camera, marker/object detection, physical puzzle verification, fallbacks.
-4. Optional: Frontend/UI/Game Experience developer.
+2. Full-Stack / DeepSpace. Own multiplayer rooms, authoritative game state, synchronization, reconnect behavior, backend integration.
+3. AR / Vision Developer, currently learning. Own browser camera, marker/object detection, physical puzzle verification, fallbacks.
+4. Frontend/UI/Game Experience developer.
 
 ## MVP: Blackout Protocol
 
