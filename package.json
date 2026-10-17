@@ -12,6 +12,10 @@
     "markers": "node ar/scripts/generate-markers.mjs"
   },
   "dependencies": {
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs-backend-webgl": "^4.22.0",
+    "@tensorflow/tfjs-converter": "^4.22.0",
+    "@tensorflow/tfjs-core": "^4.22.0",
     "jsqr": "^1.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

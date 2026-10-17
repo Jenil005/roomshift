@@ -32,6 +32,11 @@ test("manual fallback validates the puzzle, labels the result, and resets", asyn
     page.getByText("Camera verification was not used.", { exact: false }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Reset puzzle" }).click();
+  // A reset returns to the default AI scanner; QR backup is one tap away.
+  await expect(
+    page.getByRole("button", { name: "AI scanner" }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "QR backup" }).click();
   await expect(
     page.getByRole("button", { name: "Enable camera" }),
   ).toBeVisible();
@@ -48,6 +53,7 @@ test("camera permission denial is recoverable without blocking the manual demo",
     });
   });
   await page.goto("/");
+  await page.getByRole("button", { name: "QR backup" }).click();
   await page.getByRole("button", { name: "Enable camera" }).click();
   await expect(page.getByRole("alert")).toContainText("Allow camera access");
   await page.getByRole("button", { name: "Try camera again" }).click();
@@ -121,6 +127,7 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
 }) => {
   await mockCamera(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "QR backup" }).click();
   expect(
     await page.evaluate(
       () => (window as typeof window & { cameraCalls: number }).cameraCalls,
@@ -173,6 +180,7 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
 test("stopping or changing modes releases camera tracks", async ({ page }) => {
   await mockCamera(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "QR backup" }).click();
   await page.getByRole("button", { name: "Enable camera" }).click();
   await expect(page.getByText("CAMERA LIVE", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Stop camera" }).click();
@@ -256,6 +264,7 @@ test("a late permission grant after switching modes immediately releases the cam
     });
   });
   await page.goto("/");
+  await page.getByRole("button", { name: "QR backup" }).click();
   await page.getByRole("button", { name: "Enable camera" }).click();
   await expect(
     page.getByRole("heading", { name: "Connecting to your camera" }),
@@ -280,6 +289,7 @@ test("hiding the page releases camera tracks and requires an explicit restart", 
 }) => {
   await mockCamera(page);
   await page.goto("/");
+  await page.getByRole("button", { name: "QR backup" }).click();
   await page.getByRole("button", { name: "Enable camera" }).click();
   await expect(page.getByText("CAMERA LIVE", { exact: true })).toBeVisible();
   await page.evaluate(() => {

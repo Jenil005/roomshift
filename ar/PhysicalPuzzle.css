@@ -385,3 +385,78 @@
   padding: 0 0 0 8px;
   min-height: 0;
 }
+/* AI scanner */
+.scanner-panel .mode-switch {
+  flex-wrap: wrap;
+}
+.scanner-panel .ai-overlay .other polygon {
+  fill: none;
+  stroke: #83917b;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+.scanner-panel .ai-overlay .other text {
+  font-size: 20px;
+  font-weight: 400;
+  fill: #c9d2c4;
+}
+.scanner-panel .ai-overlay .qr polygon {
+  fill: #8ad3f826;
+  stroke: #8ad3f8;
+}
+.scanner-panel .ai-overlay .stale polygon {
+  stroke-dasharray: 10 8;
+  fill: none;
+}
+.scanner-panel .ai-overlay .stale text {
+  opacity: 0.6;
+}
+.scanner-panel .ai-loader {
+  width: 34px;
+  height: 34px;
+  margin: 0 auto 16px;
+  border: 3px solid #2d3b29;
+  border-top-color: var(--lime);
+  border-radius: 50%;
+  animation: ai-spin 0.9s linear infinite;
+}
+@keyframes ai-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-panel .ai-loader {
+    animation-duration: 3s;
+  }
+}
+.scanner-panel .ai-fallback-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+}
+.scanner-panel .ai-headline {
+  font: 700 12px monospace;
+  letter-spacing: 1.5px;
+  color: var(--lime);
+  margin-bottom: 12px;
+  min-height: 15px;
+}
+.scanner-panel .marker-chip {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.scanner-panel .marker-chip em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.scanner-panel .marker-chip.needs-qr {
+  border-style: dashed;
+  border-color: #5f7a8a;
+  color: #b9d3df;
+}

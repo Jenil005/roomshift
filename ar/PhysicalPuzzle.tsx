@@ -1,4 +1,6 @@
+import { AiScanner } from "./AiScanner";
 import { ArrowUpRight } from "./components/ArrowUpRight";
+import type { ObjectDetector } from "./detect/ObjectDetector";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MARKER_IDS,
@@ -36,19 +38,31 @@ const GUIDANCE = {
   verified: "Physical arrangement verified.",
 };
 
+export type ScanMode = "ai" | "qr" | "manual";
+
 /**
  * Emits local evidence; the caller decides how to submit it to the game server.
  * onResult: arrangement held in order (send as `physical`). onScanSequence: the order the
- * tags were scanned in (send as `scanned`). Neither is proof; the server decides.
+ * QR tags were scanned in (send as `scanned`). Neither is proof; the server decides.
+ * Modes: AI Scanner (default; AI for book and cup, QR tag for keys), QR Backup, Manual.
+ * onScanningChange(true) while a camera scan is live, so the host can pause heavy rendering
+ * (for example RoomScene.stop()) during detection.
  */
 export function PhysicalPuzzle({
   onResult,
   onScanSequence,
+  onScanningChange,
+  initialMode = "ai",
+  loadDetector,
 }: {
   onResult: (result: PhysicalPuzzleResult) => void;
   onScanSequence?: (scanned: MarkerId[]) => void;
+  onScanningChange?: (scanning: boolean) => void;
+  initialMode?: ScanMode;
+  loadDetector?: () => Promise<ObjectDetector>;
 }) {
-  const [mode, setMode] = useState<"camera" | "manual">("camera");
+  const [mode, setMode] = useState<ScanMode>(initialMode);
+  const [aiLive, setAiLive] = useState(false);
   const [enabled, setEnabled] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [markers, setMarkers] = useState<DetectedMarker[]>([]);
@@ -86,6 +100,10 @@ export function PhysicalPuzzle({
     [onResult],
   );
   const camera = useCameraScanner(enabled, onFrame, attempt, onScan);
+  const scanning = mode === "ai" ? aiLive : camera.status === "live";
+  useEffect(() => {
+    onScanningChange?.(scanning);
+  }, [scanning, onScanningChange]);
   useEffect(() => {
     if (camera.status === "error") {
       tracker.current.reset();
@@ -99,9 +117,11 @@ export function PhysicalPuzzle({
     setMarkers([]);
     setReading(EMPTY_READING);
   };
-  const switchMode = (next: "camera" | "manual") => {
+  // The previous mode's scanner unmounts (or is disabled) first, which releases its camera.
+  const switchMode = (next: ScanMode) => {
     setEnabled(false);
     clearScan();
+    if (next !== "ai") setAiLive(false);
     setMode(next);
   };
   const start = () => {
@@ -119,23 +139,34 @@ export function PhysicalPuzzle({
           <h2>Read the room.</h2>
         </div>
         <span
-          className={`status-tag ${camera.status === "live" ? "live" : ""}`}
+          className={`status-tag ${scanning ? "live" : ""}`}
         >
           <span />
           {mode === "manual"
             ? "MANUAL DEMO"
-            : camera.status === "live"
-              ? "CAMERA LIVE"
-              : "CAMERA OFF"}
+            : mode === "ai"
+              ? aiLive
+                ? "AI LIVE"
+                : "AI SCANNER"
+              : camera.status === "live"
+                ? "CAMERA LIVE"
+                : "CAMERA OFF"}
         </span>
       </div>
       <div className="mode-switch" aria-label="Verification method">
         <button
           type="button"
-          aria-pressed={mode === "camera"}
-          onClick={() => switchMode("camera")}
+          aria-pressed={mode === "ai"}
+          onClick={() => switchMode("ai")}
         >
-          Camera scan
+          AI scanner
+        </button>
+        <button
+          type="button"
+          aria-pressed={mode === "qr"}
+          onClick={() => switchMode("qr")}
+        >
+          QR backup
         </button>
         <button
           type="button"
@@ -145,7 +176,14 @@ export function PhysicalPuzzle({
           Manual demo
         </button>
       </div>
-      {mode === "camera" ? (
+      {mode === "ai" ? (
+        <AiScanner
+          onResult={onResult}
+          onSwitchToQr={() => switchMode("qr")}
+          onLiveChange={setAiLive}
+          loadDetector={loadDetector}
+        />
+      ) : mode === "qr" ? (
         <>
           <div
             className={`camera-stage ${camera.status === "live" ? "is-live" : ""}`}
@@ -325,6 +363,7 @@ function ManualOrder({
           order: order as MarkerId[],
           source: "manual",
           heldForMs: 0,
+          evidence: { book: "manual", cup: "manual", keys: "manual" },
         });
       }}
     >

@@ -13,14 +13,27 @@ export type DetectedMarker = {
   corners: [Point, Point, Point, Point];
 };
 
+/** How one object was observed: AI object detection, a printed QR tag, or manual entry. */
+export type EvidenceSource = "ai" | "qr" | "manual";
+
+/** A detected object with where its evidence came from. `score` is set for AI sightings only. */
+export type ObjectSighting = DetectedMarker & {
+  evidence: Exclude<EvidenceSource, "manual">;
+  score?: number;
+  label?: string; // detector class name, e.g. "book"
+};
+
 /** Client evidence only. The authoritative game server must validate submissions. */
 export type PhysicalPuzzleResult = {
   solved: boolean;
   markers: DetectedMarker[];
   detectedIds: MarkerId[];
   order: MarkerId[];
+  // "camera" covers QR and AI+QR hybrid evidence (both are observed positions in one frame).
   source: "camera" | "manual";
   heldForMs: number;
+  // Per-object evidence source. Informational: the server strips unknown keys today.
+  evidence?: Partial<Record<MarkerId, EvidenceSource>>;
 };
 
 export const PHYSICAL_ORDER: readonly MarkerId[] = ["book", "cup", "keys"];

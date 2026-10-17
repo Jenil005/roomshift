@@ -98,9 +98,20 @@ function Mission({ onReset }: { onReset: () => void }) {
                 </h2>
                 <p>
                   {result.source === "camera"
-                    ? "All three markers stayed in the correct order. The physical puzzle is complete on this device."
+                    ? "All three objects stayed in the correct order. The physical puzzle is complete on this device."
                     : "Your reported order matches the clues. Camera verification was not used."}
                 </p>
+                {result.evidence && (
+                  <p className="local-note" aria-label="Evidence">
+                    EVIDENCE:{" "}
+                    {result.order
+                      .map(
+                        (id) =>
+                          `${MARKER_LABEL[id]} · ${(result.evidence?.[id] ?? "manual").toUpperCase()}`,
+                      )
+                      .join("  /  ")}
+                  </p>
+                )}
                 <div className="solved-order">
                   {result.order.map((id, index) => (
                     <span key={id}>
