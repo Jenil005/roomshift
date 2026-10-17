@@ -1,5 +1,9 @@
-export const MARKER_IDS = ["BOOK", "CUP", "KEYS"] as const;
-export type MarkerId = (typeof MARKER_IDS)[number];
+import { OBJECT_IDS } from "../shared/constants";
+import type { ObjectId } from "../shared/types";
+
+// Marker id == object id (shared/constants OBJECT_IDS). The server matches ids case-insensitively.
+export const MARKER_IDS = OBJECT_IDS;
+export type MarkerId = ObjectId;
 export type Point = { x: number; y: number };
 
 /** Coordinates are normalized to the unmirrored camera image. */
@@ -19,8 +23,28 @@ export type PhysicalPuzzleResult = {
   heldForMs: number;
 };
 
-export const PHYSICAL_ORDER: readonly MarkerId[] = ["BOOK", "CUP", "KEYS"];
-export const MARKER_PREFIX = "ROOMSHIFT:";
+export const PHYSICAL_ORDER: readonly MarkerId[] = ["book", "cup", "keys"];
+// Printed QR tag payload: exactly roomshift:v1:<objectId> (docs/AR_AGENT.md section 6).
+export const TAG_PREFIX = "roomshift:v1:";
+export const MARKER_LABEL: Record<MarkerId, string> = {
+  book: "BOOK",
+  cup: "CUP",
+  keys: "KEYS",
+};
+
+export type ScanErrorCode =
+  | "denied"
+  | "no-camera"
+  | "insecure-context"
+  | "unknown";
+
+/** Camera QR scanning. A scan is UI feedback only; the server validates every submission. */
+export interface ScanSession {
+  start(video: HTMLVideoElement): Promise<void>; // asks for camera permission
+  stop(): void; // releases the camera
+  onScan(cb: (objectId: MarkerId) => void): void;
+  onError(cb: (e: { code: ScanErrorCode }) => void): void;
+}
 
 // ----- Shared AR room (room/, sync/, templates/) -----
 

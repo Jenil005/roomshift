@@ -19,32 +19,32 @@ function marker(id: MarkerId, x: number, y = 0.5): DetectedMarker {
     ],
   };
 }
-const correct = [marker("BOOK", 0.2), marker("CUP", 0.5), marker("KEYS", 0.8)];
+const correct = [marker("book", 0.2), marker("cup", 0.5), marker("keys", 0.8)];
 
 describe("physical order verification", () => {
   it("uses spatial position rather than detector discovery order", () => {
     expect(evaluateOrder([correct[2], correct[0], correct[1]])).toEqual({
       status: "holding",
-      order: ["BOOK", "CUP", "KEYS"],
+      order: ["book", "cup", "keys"],
     });
   });
   it("rejects missing cards, duplicates, wrong orders, and ambiguous layouts", () => {
     expect(evaluateOrder(correct.slice(0, 2)).status).toBe("incomplete");
-    expect(evaluateOrder([...correct, marker("BOOK", 0.1)]).status).toBe(
+    expect(evaluateOrder([...correct, marker("book", 0.1)]).status).toBe(
       "duplicate",
     );
     expect(
       evaluateOrder([
-        marker("CUP", 0.2),
-        marker("BOOK", 0.5),
-        marker("KEYS", 0.8),
+        marker("cup", 0.2),
+        marker("book", 0.5),
+        marker("keys", 0.8),
       ]).status,
     ).toBe("wrong-order");
     expect(
-      evaluateOrder([correct[0], marker("CUP", 0.5, 0.8), correct[2]]).status,
+      evaluateOrder([correct[0], marker("cup", 0.5, 0.8), correct[2]]).status,
     ).toBe("unaligned");
     expect(
-      evaluateOrder([correct[0], marker("CUP", 0.3), correct[2]]).status,
+      evaluateOrder([correct[0], marker("cup", 0.3), correct[2]]).status,
     ).toBe("unaligned");
   });
   it("requires 1.2 seconds of consecutive correct frames", () => {
@@ -64,7 +64,7 @@ describe("physical order verification", () => {
     tracker.update(correct, 800);
     expect(tracker.update([], 900).progress).toBe(0);
     expect(tracker.update(correct, 1000).heldForMs).toBe(0);
-    tracker.update([marker("CUP", 0.2), marker("BOOK", 0.5), correct[2]], 1100);
+    tracker.update([marker("cup", 0.2), marker("book", 0.5), correct[2]], 1100);
     expect(tracker.update(correct, 1200).heldForMs).toBe(0);
   });
   it("cannot verify across a suspended stream or after an explicit reset", () => {
@@ -115,8 +115,8 @@ describe("physical order verification", () => {
     expect(JSON.parse(JSON.stringify(result))).toMatchObject({
       solved: true,
       markers: correct,
-      detectedIds: ["BOOK", "CUP", "KEYS"],
-      order: ["BOOK", "CUP", "KEYS"],
+      detectedIds: ["book", "cup", "keys"],
+      order: ["book", "cup", "keys"],
       heldForMs: 1200,
     });
   });

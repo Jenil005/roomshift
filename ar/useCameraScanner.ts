@@ -1,161 +1,94 @@
-import { useEffect, useRef, useState } from "react";
-import { detectMarkers } from "./detectMarkers";
-import { MAX_FRAME_GAP_MS } from "./physicalOrder";
-import type { DetectedMarker } from "./types";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CameraScanSession, scanErrorCode } from "./scan/CameraScanSession";
+import type { DetectedMarker, MarkerId, ScanErrorCode } from "./types";
 
 type CameraState = {
   status: "idle" | "starting" | "live" | "error";
   message: string;
 };
 
+export const SCAN_ERROR_MESSAGE: Record<ScanErrorCode, string> = {
+  denied:
+    "Camera access was blocked. Allow camera access in your browser settings, then try again. You can also use the manual demo.",
+  "no-camera":
+    "No camera was found. Connect a camera or use the manual demo.",
+  "insecure-context":
+    "Camera access requires HTTPS. Open a secure deployment, or use the manual demo.",
+  unknown:
+    "The camera could not start. Close other apps using it and try again, or use the manual demo.",
+};
+
 export function cameraErrorMessage(error: unknown): string {
-  const name = error instanceof Error ? error.name : "";
-  if (name === "NotAllowedError" || name === "SecurityError")
-    return "Camera access was blocked. Allow camera access in your browser settings, then try again. You can also use the manual demo.";
-  if (name === "NotFoundError")
-    return "No camera was found. Connect a camera or use the manual demo.";
-  if (name === "NotReadableError" || name === "AbortError")
-    return "The camera could not start. Close other apps using it and try again.";
-  return "Camera scanning stopped. Try again, or use the manual demo.";
+  return SCAN_ERROR_MESSAGE[scanErrorCode(error)];
 }
 
+/** React wrapper around CameraScanSession. One session per enable/attempt. */
 export function useCameraScanner(
   enabled: boolean,
   onFrame: (markers: DetectedMarker[], now: number) => void,
   attempt = 0,
+  onScan?: (id: MarkerId) => void,
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const sessionRef = useRef<CameraScanSession | null>(null);
+  const onScanRef = useRef(onScan);
+  onScanRef.current = onScan;
   const [state, setState] = useState<CameraState>({
     status: "idle",
     message: "",
   });
+  const [torch, setTorch] = useState({ supported: false, on: false });
 
   useEffect(() => {
+    setTorch({ supported: false, on: false });
     if (!enabled) {
       setState({ status: "idle", message: "" });
       return;
     }
-    let disposed = false;
-    let stream: MediaStream | undefined;
-    let animation = 0;
-    let lastScan = -Infinity;
-    let lastVideoTime = -1;
     const video = videoRef.current;
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d", { willReadFrequently: true });
-    const release = () => {
-      cancelAnimationFrame(animation);
-      stream?.getTracks().forEach((track) => track.stop());
-      if (video) video.srcObject = null;
-    };
+    const session = new CameraScanSession();
+    sessionRef.current = session;
+    let active = true;
     const fail = (message: string) => {
-      if (disposed) return;
-      disposed = true;
-      release();
+      if (!active) return;
+      active = false;
+      session.stop();
+      setTorch({ supported: false, on: false });
       setState({ status: "error", message });
     };
-    const scan = (now: number) => {
-      if (disposed) return;
-      if (
-        video &&
-        context &&
-        video.readyState >= 2 &&
-        video.videoWidth > 0 &&
-        video.currentTime !== lastVideoTime &&
-        now - lastScan >= 120
-      ) {
-        lastScan = now;
-        lastVideoTime = video.currentTime;
-        const scale = Math.min(1, 960 / video.videoWidth);
-        canvas.width = Math.round(video.videoWidth * scale);
-        canvas.height = Math.round(video.videoHeight * scale);
-        try {
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          onFrame(
-            detectMarkers(
-              context.getImageData(0, 0, canvas.width, canvas.height).data,
-              canvas.width,
-              canvas.height,
-            ),
-            now,
-          );
-        } catch (error) {
-          fail(cameraErrorMessage(error));
-          return;
-        }
-      }
-      if (Number.isFinite(lastScan) && now - lastScan > MAX_FRAME_GAP_MS) {
-        onFrame([], now);
-        lastScan = now;
-      }
-      animation = requestAnimationFrame(scan);
-    };
-    const onVisibility = () => {
-      if (document.hidden)
-        fail(
-          "Camera paused while this page was hidden. Restart scanning when you return.",
-        );
-    };
-    document.addEventListener("visibilitychange", onVisibility);
+    session.onError(({ code }) => fail(SCAN_ERROR_MESSAGE[code]));
+    session.onEnded((reason) =>
+      fail(
+        reason === "hidden"
+          ? "Camera paused while this page was hidden. Restart scanning when you return."
+          : "Camera disconnected. Reconnect it and restart scanning.",
+      ),
+    );
+    session.onMarkers(onFrame);
+    session.onScan((id) => onScanRef.current?.(id));
     setState({ status: "starting", message: "" });
-    void (async () => {
-      if (!window.isSecureContext) {
-        fail(
-          "Camera access requires HTTPS. Open a secure deployment, or use the manual demo.",
-        );
-        return;
-      }
-      if (!navigator.mediaDevices?.getUserMedia) {
-        fail(
-          "This browser cannot access a camera. Try a current mobile browser or use the manual demo.",
-        );
-        return;
-      }
-      if (!video || !context) {
-        fail(
-          "This browser cannot prepare the camera view. Use the manual demo.",
-        );
-        return;
-      }
-      try {
-        const acquired = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" },
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-          },
-          audio: false,
-        });
-        if (disposed) {
-          acquired.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        stream = acquired;
-        stream
-          .getVideoTracks()
-          .forEach((track) =>
-            track.addEventListener(
-              "ended",
-              () =>
-                fail("Camera disconnected. Reconnect it and restart scanning."),
-              { once: true },
-            ),
-          );
-        video.srcObject = stream;
-        await video.play();
-        if (disposed) return;
-        setState({ status: "live", message: "" });
-        animation = requestAnimationFrame(scan);
-      } catch (error) {
-        fail(cameraErrorMessage(error));
-      }
-    })();
+    if (!video) {
+      fail("This browser cannot prepare the camera view. Use the manual demo.");
+      return;
+    }
+    void session.start(video).then(() => {
+      if (!active || !session.live) return;
+      setState({ status: "live", message: "" });
+      setTorch({ supported: session.torchSupported(), on: false });
+    });
     return () => {
-      disposed = true;
-      document.removeEventListener("visibilitychange", onVisibility);
-      release();
+      active = false;
+      session.stop();
+      if (sessionRef.current === session) sessionRef.current = null;
     };
   }, [enabled, onFrame, attempt]);
 
-  return { videoRef, ...state };
+  const toggleTorch = useCallback(async () => {
+    const session = sessionRef.current;
+    if (!session) return;
+    const next = !torch.on;
+    if (await session.setTorch(next)) setTorch({ supported: true, on: next });
+  }, [torch.on]);
+
+  return { videoRef, ...state, torch: { ...torch, toggle: toggleTorch } };
 }

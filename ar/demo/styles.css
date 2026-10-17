@@ -876,3 +876,12 @@ footer {
     color: #555;
   }
 }
+.scan-sequence {
+  font: 11px monospace;
+  color: var(--lime);
+  margin: 14px 0 0;
+}
+.scan-sequence .text-button {
+  padding: 0 0 0 8px;
+  min-height: 0;
+}

@@ -6,6 +6,17 @@ The AR module recognizes the supplied QR markers on a book, cup, and set of keys
 
 Issue #3 uses `jsQR`, a lightweight JavaScript QR decoder. Printed QR cards are distinct fiducials with corners in camera-image coordinates, so no world tracking, 3D engine, GPU model, or external service is needed. Camera access uses the browser `getUserMedia` API. This is sufficient for projected left-to-right order and leaves multiplayer authority with the backend.
 
+## Tags and scanning contract (docs/AR_AGENT.md section 6)
+
+1. **Tag payload:** exactly `roomshift:v1:<objectId>`, where `<objectId>` is one of `OBJECT_IDS` in `shared/constants` (`book`, `cup`, `keys`). Anything else, including the old `ROOMSHIFT:BOOK` cards and wrong-case ids, is ignored without an error (`scan/tagPayload.ts`). Reprint old cards.
+2. **Worker decoding:** `scan/CameraScanSession.ts` captures frames (max 960 px wide, about 8 per second, one frame in flight) and decodes them with jsQR in `scan/decodeWorker.ts`. If the worker cannot start, it decodes on the main thread. jsQR is kept rather than `qr-scanner` because the arrangement check needs every card in one frame, and `qr-scanner` returns one code per frame.
+3. **`ScanSession`** (`types.ts`), implemented by `CameraScanSession`: `start(video)`, `stop()`, `onScan(id)`, `onError({ code })` with `denied | no-camera | insecure-context | unknown`. Extras: `onMarkers(markers, now)` for the arrangement check, `onEnded("hidden" | "track-ended")`, `torchSupported()` and `setTorch(on)`. The camera is released on `stop()`, when the page is hidden, and when the track ends.
+4. **Debounce:** `onScan` fires once per tag sighting. A tag is ignored until it has been out of view for 1.5 s (`ScanDebouncer`). Each accepted scan vibrates where supported (Android).
+5. **`ScanSequence`:** `append(id)` (repeats ignored), `clear()`, `current()`. `PhysicalPuzzle` shows it and reports it through `onScanSequence`.
+6. **Printable tags:** `ar/print/tags.html` (7 cm QR per object with a large label). Regenerate it and `ar/public/markers/*.svg` with `npm run markers`.
+
+What to send in `puzzle:submit` (see `checkPuzzle1` on `feature/backend`): prefer `physical` = the `onResult` value (the server sorts marker centers itself and requires a 1.2 s hold), else `scanned` = the scan sequence, else `manualCode` (for example `BCK`). Never send a local `solved` as proof.
+
 Implementation, types, demo UI, assets, generation script, and tests live under `ar/`. Root package/build files provide the runnable harness because the repository previously contained only placeholders. No backend or shared files are changed.
 
 ## Run and play
@@ -35,8 +46,8 @@ The exported `PhysicalPuzzleResult` contract lives in `ar/types.ts` so other tea
 {
   solved: true,
   markers: detections,                // { id, center: { x, y }, corners: [...] }[]
-  detectedIds: ['BOOK', 'CUP', 'KEYS'], // camera discovery order, not spatial order
-  order: ['BOOK', 'CUP', 'KEYS'],       // left to right
+  detectedIds: ['book', 'cup', 'keys'], // camera discovery order, not spatial order
+  order: ['book', 'cup', 'keys'],       // left to right
   source: 'camera',                   // or 'manual'
   heldForMs: 1200
 }
@@ -44,7 +55,7 @@ The exported `PhysicalPuzzleResult` contract lives in `ar/types.ts` so other tea
 
 Manual submissions have `markers: []`, `detectedIds: []` and `heldForMs: 0`. The current frontend shows a **local puzzle result only**. There is no multiplayer backend yet. When integrating DeepSpace, submit this evidence with authenticated room/player context to the authoritative server. The server must validate the current phase, expected order, required participants, and whether manual submissions are allowed. Client evidence is not tamper-proof and must not authorize a mission win on its own.
 
-`detectMarkers` is independent of React and accepts RGBA frame pixels. It searches overlapping vertical regions to avoid mixing finder patterns from multiple QR codes, then masks decoded regions to avoid duplicate reads. Separate physical cards carrying the same ID remain separate detections and are rejected by the validator. Processing is limited to 960 pixels wide, at most eight decoded QR codes per frame, and approximately eight scans per second. Camera focus, lighting, perspective, and device speed still affect reliability.
+`detectMarkers` is independent of React and accepts RGBA frame pixels. It searches overlapping vertical regions to avoid mixing finder patterns from multiple QR codes, then masks decoded regions to avoid duplicate reads. Separate physical cards carrying the same ID remain separate detections and are rejected by the validator. Processing is limited to 960 pixels wide, at most eight decoded QR codes per frame, and approximately eight scans per second, in a web worker. Camera focus, lighting, perspective, and device speed still affect reliability.
 
 `PhysicalOrderTracker` is also UI-independent. It accepts normalized detections and a monotonic timestamp. Use `toCameraResult` to get a serializable result on any frame, including `solved: false` before the full hold:
 
@@ -68,9 +79,9 @@ npm run build
 npm run test:browser
 ```
 
-Browser tests use a system Chromium at `/usr/bin/chromium` if present. Else install the Playwright browser with `npx playwright install chromium`; `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select another executable. Tests cover real QR raster decoding, missing/duplicate/wrong markers, temporal stability, permission errors, manual validation, simulated live-camera verification, track cleanup, and mobile layout. Simulated camera tests do not replace a real-device trial on iOS Safari and Android Chrome.
+Browser tests use a system Chromium at `/usr/bin/chromium` if present. On Windows, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to the installed Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`). Else install the Playwright browser with `npx playwright install chromium`; `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` can select another executable. Tests cover real QR raster decoding, missing/duplicate/wrong markers, temporal stability, permission errors, manual validation, simulated live-camera verification, track cleanup, and mobile layout. Simulated camera tests do not replace a real-device trial on iOS Safari and Android Chrome.
 
-The printable SVGs are checked in under `ar/public/markers/`. Regenerate them with `npm run markers` if the marker format changes. `qrcode` is a development dependency used to generate these assets and test inputs; it is not shipped in the application bundle.
+The printable SVGs (`ar/public/markers/`) and `ar/print/tags.html` are checked in. Regenerate them with `npm run markers` if the marker format changes. `qrcode` is a development dependency used to generate these assets and test inputs; it is not shipped in the application bundle.
 
 ## Real-phone test procedure (not yet performed)
 

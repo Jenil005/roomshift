@@ -31,16 +31,16 @@ function frame(payloads: string[]) {
 describe("real QR image decoding", () => {
   it("finds all three cards in one image without modifying camera pixels", () => {
     const { pixels, width, height } = frame([
-      "ROOMSHIFT:BOOK",
-      "ROOMSHIFT:CUP",
-      "ROOMSHIFT:KEYS",
+      "roomshift:v1:book",
+      "roomshift:v1:cup",
+      "roomshift:v1:keys",
     ]);
     const original = pixels.slice();
     const detected = detectMarkers(pixels, width, height);
     expect(detected).toHaveLength(3);
     expect(evaluateOrder(detected)).toEqual({
       status: "holding",
-      order: ["BOOK", "CUP", "KEYS"],
+      order: ["book", "cup", "keys"],
     });
     expect(
       Buffer.compare(Buffer.from(pixels.buffer), Buffer.from(original.buffer)),
@@ -56,22 +56,32 @@ describe("real QR image decoding", () => {
   it("ignores unrelated QR data while continuing to find known markers", () => {
     const { pixels, width, height } = frame([
       "https://example.com",
-      "ROOMSHIFT:KEYS",
-      "ROOMSHIFT:UNKNOWN",
+      "roomshift:v1:keys",
+      "roomshift:v1:unknown",
     ]);
     expect(
       detectMarkers(pixels, width, height).map((marker) => marker.id),
-    ).toEqual(["KEYS"]);
+    ).toEqual(["keys"]);
   });
   it("retains duplicate identities so validation rejects them", () => {
     const { pixels, width, height } = frame([
-      "ROOMSHIFT:BOOK",
-      "ROOMSHIFT:BOOK",
-      "ROOMSHIFT:KEYS",
+      "roomshift:v1:book",
+      "roomshift:v1:book",
+      "roomshift:v1:keys",
     ]);
     expect(evaluateOrder(detectMarkers(pixels, width, height)).status).toBe(
       "duplicate",
     );
+  });
+  it("rejects the legacy ROOMSHIFT: payload and wrong-case ids", () => {
+    const { pixels, width, height } = frame([
+      "ROOMSHIFT:BOOK",
+      "roomshift:v1:CUP",
+      "roomshift:v1:keys",
+    ]);
+    expect(
+      detectMarkers(pixels, width, height).map((marker) => marker.id),
+    ).toEqual(["keys"]);
   });
   it("returns no markers for blank or invalid frames", () => {
     const { pixels, width, height } = frame([]);

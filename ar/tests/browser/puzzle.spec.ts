@@ -7,23 +7,23 @@ test("manual fallback validates the puzzle, labels the result, and resets", asyn
   await page.getByRole("button", { name: "Manual demo", exact: true }).click();
   await page
     .getByRole("combobox", { name: "Left", exact: true })
-    .selectOption("CUP");
+    .selectOption("cup");
   await page
     .getByRole("combobox", { name: "Middle", exact: true })
-    .selectOption("BOOK");
+    .selectOption("book");
   await page
     .getByRole("combobox", { name: "Right", exact: true })
-    .selectOption("KEYS");
+    .selectOption("keys");
   await page.getByRole("button", { name: "Check arrangement" }).click();
   await expect(page.getByRole("status")).toContainText("does not match");
   await page
     .getByRole("combobox", { name: "Left", exact: true })
-    .selectOption("BOOK");
+    .selectOption("book");
   await page.getByRole("button", { name: "Check arrangement" }).click();
   await expect(page.getByRole("status")).toContainText("each object once");
   await page
     .getByRole("combobox", { name: "Middle", exact: true })
-    .selectOption("CUP");
+    .selectOption("cup");
   await page.getByRole("button", { name: "Check arrangement" }).click();
   await expect(
     page.getByRole("heading", { name: "Arrangement matched." }),
@@ -64,10 +64,19 @@ async function mockCamera(page: Page) {
       cameraCalls: number;
       cameraTracks: MediaStreamTrack[];
       markerOrder: string[];
+      workersStarted: number;
+    };
+    state.workersStarted = 0;
+    const NativeWorker = window.Worker;
+    window.Worker = class extends NativeWorker {
+      constructor(url: string | URL, options?: WorkerOptions) {
+        super(url, options);
+        state.workersStarted += 1;
+      }
     };
     state.cameraCalls = 0;
     state.cameraTracks = [];
-    state.markerOrder = ["CUP", "BOOK", "KEYS"];
+    state.markerOrder = ["cup", "book", "keys"];
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         state.cameraCalls += 1;
@@ -76,9 +85,9 @@ async function mockCamera(page: Page) {
         canvas.height = 540;
         const context = canvas.getContext("2d")!;
         const images: Record<string, HTMLImageElement> = {};
-        for (const id of ["BOOK", "CUP", "KEYS"]) {
+        for (const id of ["book", "cup", "keys"]) {
           const image = new Image();
-          image.src = `/markers/${id.toLowerCase()}.svg`;
+          image.src = `/markers/${id}.svg`;
           await image.decode();
           images[id] = image;
         }
@@ -122,6 +131,17 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
     timeout: 15000,
   });
   await expect(page.locator(".marker-overlay polygon")).toHaveCount(3);
+  // Decoding runs in a web worker, and each tag lands once in the scan sequence.
+  expect(
+    await page.evaluate(
+      () =>
+        (window as typeof window & { workersStarted: number }).workersStarted,
+    ),
+  ).toBeGreaterThan(0);
+  const sequence = page.getByLabel("Scan order");
+  for (const label of ["BOOK", "CUP", "KEYS"])
+    await expect(sequence).toContainText(label);
+  expect((await sequence.textContent())!.match(/BOOK/g)).toHaveLength(1);
   await page.screenshot({
     path: "test-results/camera-puzzle.png",
     fullPage: true,
@@ -131,9 +151,9 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
   ).toHaveCount(0);
   await page.evaluate(() => {
     (window as typeof window & { markerOrder: string[] }).markerOrder = [
-      "BOOK",
-      "CUP",
-      "KEYS",
+      "book",
+      "cup",
+      "keys",
     ];
   });
   await expect(

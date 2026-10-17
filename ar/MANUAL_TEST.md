@@ -9,7 +9,7 @@ Mark each step **PASS**, **FAIL** (with a note), or **BLOCKED** (with the reason
 1. **The build must pass.** Run `npm run build` in `ar/` (room module) and at the repo root (marker prototype). Both passed after the A1 types fix on 2026-10-17. Do not test a build that fails.
 2. **Use HTTPS.** Open the page over HTTPS. Plain `http://<laptop-ip>` gives the page no camera and no motion sensors (see "HTTPS route" at the end).
 3. **Phones:** use at least one iPhone (Safari) and one Android phone (Chrome), both on current OS versions.
-4. **Print the tags** at 100% scale on white paper. Keep the white border (quiet zone). Tape one to each object: book, cup, keys.
+4. **Print the tags** from `ar/print/tags.html` at 100% scale on white paper. Keep the white border (quiet zone). Tape one to each object: book, cup, keys. Old cards with `ROOMSHIFT:BOOK` payloads no longer scan; reprint them.
 5. **Light the room evenly.** Avoid glare on glossy paper and strong backlight from windows.
 6. **Record for each run:** date and time, test URL, commit hash, and the run sheet at the bottom.
 
@@ -19,8 +19,8 @@ What can be tested today:
 |---|---|---|
 | Shared room render, motion, drag, tap | `room/`, `demo/main.ts` | One phone only. `LocalSync` uses BroadcastChannel, which connects tabs in one browser and never two phones. |
 | Room sync between phones | `DeepSpaceSync` (Task A3) | **Blocked** until A3 is done. |
-| QR tag scanning, `roomshift:v1:<id>` | `ScanSession` (Task A2) | **Blocked** until A2 is done. |
-| Marker order puzzle (jsQR prototype) | `PhysicalPuzzle.tsx` | Yes, on each phone separately (local result only). |
+| QR tag scanning, `roomshift:v1:<id>` | `CameraScanSession`, shown in `PhysicalPuzzle.tsx` | Yes, on each phone separately (local result only). |
+| Marker order puzzle | `PhysicalPuzzle.tsx` | Yes, on each phone separately (local result only). |
 
 ## A. Shared AR room, one phone (possible after the build is fixed)
 
@@ -49,18 +49,18 @@ What can be tested today:
 17. Turn on airplane mode on phone 2 for 10 s, then turn it off. Phone 2 recovers or shows a clear reconnect message.
 18. Host taps **Reset**. Both phones return to blackout.
 
-## C. Physical input, QR tag scanning (BLOCKED until Task A2 ScanSession)
+## C. Physical input, QR tag scanning (marker puzzle page, one phone at a time)
 
 19. Open the scan screen and allow the camera. The rear camera opens (not the selfie camera) and the preview is not mirrored.
-20. Scan the BOOK, CUP and KEYS tags in turn. Each scan gives a vibration or visual confirmation, and the scanned list reads `book, cup, keys`.
+20. Scan the BOOK, CUP and KEYS tags in turn. Each scan gives a vibration (Android) and the "SCANNED:" line under the progress bar reads `BOOK → CUP → KEYS`.
 21. Hold the same tag in view for 3 s. It is recorded only once (1.5 s debounce).
-22. Scan an unrelated QR code (for example any website QR). It is rejected without a crash and nothing is added.
-23. Make the room dim. Scanning gets harder: note the distance and angle that still work. If the browser offers a torch toggle, it helps. If not, lighting instructions are shown.
+22. Scan an unrelated QR code (for example any website QR) and an old `ROOMSHIFT:BOOK` card. Both are ignored without a crash and nothing is added.
+23. Make the room dim. Scanning gets harder: note the distance and angle that still work. On Android Chrome a **Torch on** button appears; check that it lights the cards. On iPhone there is no torch button, and the guidance line suggests more light.
 24. Close the scan screen. The camera indicator (the green dot on iOS, the camera icon on Android) turns off.
 25. Start a scan, then lock the phone and unlock it. The camera was released, and scanning resumes or asks to restart.
 26. Deny camera permission (reset site permissions first). The manual code field appears and is reachable in at most 2 taps. Entering the sequence by hand works.
 27. Open the page over plain HTTP. You see an "insecure context" message and the manual field. The page must not crash or hang.
-28. Submitting the sequence sends `puzzle:submit`. Only the backend's answer moves the game forward. A local "solved" must never advance the mission by itself.
+28. Tap **Clear scans** and confirm the list empties. (Sending the sequence in `puzzle:submit` needs the frontend integration, Task A4. Only the backend's answer may move the game forward.)
 
 ## D. Marker order puzzle, existing jsQR prototype (one phone at a time)
 

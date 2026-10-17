@@ -1,10 +1,6 @@
 import jsQR from "jsqr";
-import {
-  MARKER_IDS,
-  MARKER_PREFIX,
-  type DetectedMarker,
-  type MarkerId,
-} from "./types";
+import { parseTagPayload } from "./scan/tagPayload";
+import type { DetectedMarker } from "./types";
 
 /** Decode separate QR cards in one frame, without uploading images. */
 export function detectMarkers(
@@ -59,16 +55,14 @@ export function detectMarkers(
         bottomRightCorner,
         bottomLeftCorner,
       ].map((p) => ({ x: p.x + left, y: p.y }));
-      const id = code.data.startsWith(MARKER_PREFIX)
-        ? code.data.slice(MARKER_PREFIX.length)
-        : "";
-      if (MARKER_IDS.includes(id as MarkerId)) {
+      const id = parseTagPayload(code.data);
+      if (id) {
         const normalized = corners.map(({ x, y }) => ({
           x: x / width,
           y: y / height,
         })) as DetectedMarker["corners"];
         markers.push({
-          id: id as MarkerId,
+          id,
           center: {
             x: normalized.reduce((sum, p) => sum + p.x, 0) / 4,
             y: normalized.reduce((sum, p) => sum + p.y, 0) / 4,

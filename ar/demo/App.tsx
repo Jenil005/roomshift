@@ -1,7 +1,18 @@
 import { ArrowUpRight } from "../components/ArrowUpRight";
 import { useState } from "react";
 import { PhysicalPuzzle } from "../PhysicalPuzzle";
-import { MARKER_IDS, type PhysicalPuzzleResult } from "../types";
+import {
+  MARKER_IDS,
+  MARKER_LABEL,
+  type MarkerId,
+  type PhysicalPuzzleResult,
+} from "../types";
+
+const MARKER_THEME: Record<MarkerId, string> = {
+  book: "KNOWLEDGE",
+  cup: "CONTAINMENT",
+  keys: "ACCESS",
+};
 
 const clues = [
   {
@@ -94,7 +105,7 @@ function Mission({ onReset }: { onReset: () => void }) {
                   {result.order.map((id, index) => (
                     <span key={id}>
                       {index > 0 && <b aria-hidden="true">→</b>}
-                      {id}
+                      {MARKER_LABEL[id]}
                     </span>
                   ))}
                 </div>
@@ -197,19 +208,13 @@ function MarkerSheet() {
           <article key={id}>
             <span>ROOMSHIFT / 0{index + 1}</span>
             <img
-              src={`${import.meta.env.BASE_URL}markers/${id.toLowerCase()}.svg`}
-              alt={`RoomShift ${id} QR marker`}
+              src={`${import.meta.env.BASE_URL}markers/${id}.svg`}
+              alt={`RoomShift ${MARKER_LABEL[id]} QR marker`}
               width={240}
               height={240}
             />
-            <h2>{id}</h2>
-            <p>
-              {id === "BOOK"
-                ? "KNOWLEDGE"
-                : id === "CUP"
-                  ? "CONTAINMENT"
-                  : "ACCESS"}
-            </p>
+            <h2>{MARKER_LABEL[id]}</h2>
+            <p>{MARKER_THEME[id]}</p>
           </article>
         ))}
       </div>

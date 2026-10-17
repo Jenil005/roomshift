@@ -2,6 +2,7 @@ import { ArrowUpRight } from "./components/ArrowUpRight";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   MARKER_IDS,
+  MARKER_LABEL,
   PHYSICAL_ORDER,
   type DetectedMarker,
   type MarkerId,
@@ -12,6 +13,7 @@ import {
   toCameraResult,
   type OrderReading,
 } from "./physicalOrder";
+import { ScanSequence } from "./scan/ScanSequence";
 import { useCameraScanner } from "./useCameraScanner";
 
 const EMPTY_READING: OrderReading = {
@@ -21,7 +23,8 @@ const EMPTY_READING: OrderReading = {
   heldForMs: 0,
 };
 const GUIDANCE = {
-  incomplete: "Keep all three marker cards in view.",
+  incomplete:
+    "Keep all three marker cards in view. Low light? Turn on a lamp or move closer.",
   duplicate: "Use one card per object. A duplicate marker is visible.",
   unaligned:
     "Place the cards side by side in a single row, with space between them.",
@@ -32,11 +35,17 @@ const GUIDANCE = {
   verified: "Physical arrangement verified.",
 };
 
-/** Emits local evidence; the caller decides how to submit it to the game server. */
+/**
+ * Emits local evidence; the caller decides how to submit it to the game server.
+ * onResult: arrangement held in order (send as `physical`). onScanSequence: the order the
+ * tags were scanned in (send as `scanned`). Neither is proof; the server decides.
+ */
 export function PhysicalPuzzle({
   onResult,
+  onScanSequence,
 }: {
   onResult: (result: PhysicalPuzzleResult) => void;
+  onScanSequence?: (scanned: MarkerId[]) => void;
 }) {
   const [mode, setMode] = useState<"camera" | "manual">("camera");
   const [enabled, setEnabled] = useState(false);
@@ -45,6 +54,22 @@ export function PhysicalPuzzle({
   const [reading, setReading] = useState(EMPTY_READING);
   const tracker = useRef(new PhysicalOrderTracker());
   const submitted = useRef(false);
+  const sequence = useRef(new ScanSequence());
+  const [scanned, setScanned] = useState<MarkerId[]>([]);
+  const onScan = useCallback(
+    (id: MarkerId) => {
+      if (!sequence.current.append(id)) return;
+      const list = sequence.current.current();
+      setScanned(list);
+      onScanSequence?.(list);
+    },
+    [onScanSequence],
+  );
+  const clearSequence = () => {
+    sequence.current.clear();
+    setScanned([]);
+    onScanSequence?.([]);
+  };
   const onFrame = useCallback(
     (detected: DetectedMarker[], now: number) => {
       if (submitted.current) return;
@@ -59,7 +84,7 @@ export function PhysicalPuzzle({
     },
     [onResult],
   );
-  const camera = useCameraScanner(enabled, onFrame, attempt);
+  const camera = useCameraScanner(enabled, onFrame, attempt, onScan);
   useEffect(() => {
     if (camera.status === "error") {
       tracker.current.reset();
@@ -80,6 +105,7 @@ export function PhysicalPuzzle({
   };
   const start = () => {
     clearScan();
+    clearSequence();
     setAttempt((value) => value + 1);
     setEnabled(true);
   };
@@ -151,7 +177,7 @@ export function PhysicalPuzzle({
                       )}
                       textAnchor="middle"
                     >
-                      {marker.id}
+                      {MARKER_LABEL[marker.id]}
                     </text>
                   </g>
                 ))}
@@ -204,7 +230,7 @@ export function PhysicalPuzzle({
                   className={`marker-chip ${markers.some((marker) => marker.id === id) ? "detected" : ""}`}
                 >
                   <small>0{index + 1}</small>
-                  {id}
+                  {MARKER_LABEL[id]}
                   <span
                     aria-label={
                       markers.some((marker) => marker.id === id)
@@ -232,6 +258,23 @@ export function PhysicalPuzzle({
             >
               <div style={{ width: `${reading.progress * 100}%` }} />
             </div>
+            {scanned.length > 0 && (
+              <p className="scan-sequence" aria-label="Scan order">
+                SCANNED: {scanned.map((id) => MARKER_LABEL[id]).join(" → ")}
+                <button className="text-button" onClick={clearSequence}>
+                  Clear scans
+                </button>
+              </p>
+            )}
+            {camera.status === "live" && camera.torch.supported && (
+              <button
+                className="text-button"
+                aria-pressed={camera.torch.on}
+                onClick={() => void camera.torch.toggle()}
+              >
+                {camera.torch.on ? "Torch off" : "Torch on"}
+              </button>
+            )}
             {(camera.status === "live" || camera.status === "starting") && (
               <button
                 className="text-button"
@@ -310,7 +353,7 @@ function ManualOrder({
               <option value="">Select object</option>
               {MARKER_IDS.map((id) => (
                 <option key={id} value={id}>
-                  {id}
+                  {MARKER_LABEL[id]}
                 </option>
               ))}
             </select>
