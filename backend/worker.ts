@@ -123,6 +123,10 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
    * an authenticated app owner/admin. deepspace dev/test set it locally.
    */
   ALLOW_DEBUG_ROUTES?: string
+  /** Gemini narration (optional). Set with npx deepspace secrets set GEMINI_API_KEY=...; absent = static narration only. */
+  GEMINI_API_KEY?: string
+  /** Optional model override; defaults to DEFAULT_GEMINI_MODEL in src/narration/gemini.ts. */
+  GEMINI_MODEL?: string
 }
 
 export type AppContext = { Bindings: Env }

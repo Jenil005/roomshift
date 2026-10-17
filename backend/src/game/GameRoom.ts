@@ -9,6 +9,9 @@
 
 import type { GameResult } from '@shared/events'
 import type { Env } from '../../worker'
+import type { GamePhase, Room } from '@shared/types'
+import { GEMINI_PHASES } from '../narration/fallback'
+import { DEFAULT_GEMINI_MODEL, generateNarration, narrationContext } from '../narration/gemini'
 import { nextDeadline, reduce, toView, type EngineCommand, type GameState } from './engine'
 import { RateLimiter } from './rateLimit'
 
@@ -81,6 +84,10 @@ export class GameRoom implements DurableObject {
       const deadline = nextDeadline(state)
       if (deadline === null) await storage.deleteAlarm()
       else await storage.setAlarm(Math.max(deadline, now + MIN_ALARM_DELAY_MS))
+      if (prev?.phase !== state.phase && GEMINI_PHASES.has(state.phase) && this.env.GEMINI_API_KEY) {
+        // Not awaited: the command (and the room's lock) never waits on Gemini.
+        this.ctx.waitUntil(this.narrate(state.phase, toView(state)))
+      }
     } else if (prev) {
       // Room ended (everyone left or idle timeout): drop all storage and the public record.
       await storage.deleteAlarm()
@@ -88,6 +95,14 @@ export class GameRoom implements DurableObject {
       await this.mirror(prev.code, null)
     }
     return result
+  }
+
+  /** Asks Gemini for a line for `phase`; the engine applies it only if still in that phase. */
+  private async narrate(phase: GamePhase, room: Room): Promise<void> {
+    const model = this.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL
+    const text = await generateNarration(this.env.GEMINI_API_KEY!, model, narrationContext(room))
+    if (!text) return // the fallback line stays
+    await this.ctx.blockConcurrencyWhile(() => this.safeRun({ type: 'narration:set', phase, text }))
   }
 
   /** Upserts (or deletes) the public `rs_rooms` record. Returns false on failure. */

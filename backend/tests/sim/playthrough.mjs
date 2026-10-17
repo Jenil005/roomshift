@@ -39,8 +39,12 @@ function watchRoom(code) {
   const wsUrl = `${BASE.replace(/^http/, 'ws')}/ws/${encodeURIComponent(`app:${APP_ID}`)}`
   const ws = new WebSocket(wsUrl)
   const watcher = { latest: null, ws, ready: null }
+  watcher.narration = new Map() // phase -> { text, source } (last seen)
   const take = (record) => {
-    if (record?.data?.code === code) watcher.latest = record.data.view
+    if (record?.data?.code !== code) return
+    watcher.latest = record.data.view
+    const v = watcher.latest
+    if (v?.narration) watcher.narration.set(v.phase, { text: v.narration, source: v.narrationSource })
   }
   watcher.ready = new Promise((resolve, reject) => {
     ws.addEventListener('open', () => {
@@ -216,6 +220,15 @@ async function main() {
   await press(tokB, true)
   await waitFor(() => live.latest?.phase === 'COMPLETE', 'both holding -> COMPLETE on the live view')
   check(live.latest?.systems?.door === true && live.latest?.events?.some((e) => e.type === 'game:complete'), 'door online and game:complete recorded', live.latest)
+
+  // --- narration: every phase shows a line; Gemini replaces the fallback when configured ---
+  const phasesPlayed = ['LOBBY', 'READY', 'INTRO', 'PUZZLE_1', 'PUZZLE_1_COMPLETE', 'PUZZLE_2', 'PUZZLE_2_COMPLETE', 'FINAL_SEQUENCE', 'COMPLETE']
+  await sleep(3000) // give a Gemini reply for COMPLETE time to land
+  const missing = phasesPlayed.filter((p) => !live.narration.get(p)?.text)
+  check(missing.length === 0, 'every phase showed a narration line', missing)
+  const sources = [...live.narration].map(([p, n]) => `${p}:${n.source}`)
+  console.log(`      narration sources -> ${sources.join(' ')}`)
+  if (process.env.EXPECT_GEMINI) check(sources.some((s) => s.endsWith(':gemini')), 'at least one phase narrated by Gemini', sources)
 
   // --- demo reset ---
   check((await api({ type: 'game:reset', code, playerToken: tokB })).code === 'not_host', 'non-host reset -> not_host')

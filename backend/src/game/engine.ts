@@ -41,6 +41,7 @@ import type {
   RoomEventEntry,
   SystemsState,
 } from '@shared/types'
+import { FALLBACK_NARRATION } from '../narration/fallback'
 import { checkPuzzle1, dealPuzzle1Clues } from './puzzle1'
 
 const MAX_EVENTS = 20
@@ -91,6 +92,7 @@ export interface GameState {
   final: FinalState | null
   events: RoomEventEntry[]
   narration?: string
+  narrationSource?: 'gemini' | 'fallback'
 }
 
 type Authed = { tokenHash: string }
@@ -125,6 +127,7 @@ export type EngineCommand =
   | ({ type: 'final:force' } & Authed)
   | { type: 'tick' } // timers: presence, auto-advance, idle cleanup
   | { type: 'room:view' } // unauthenticated read of the public view (GET /api/game/room/:code)
+  | { type: 'narration:set'; phase: GamePhase; text: string } // internal only: Gemini result
 
 export interface EngineContext {
   now: number
@@ -166,7 +169,7 @@ export function toView(state: GameState): Room {
     phase: state.phase,
     players,
     createdAt: state.createdAt,
-    ...(state.narration ? { narration: state.narration } : {}),
+    ...(state.narration ? { narration: state.narration, narrationSource: state.narrationSource ?? 'fallback' } : {}),
     hostId: state.hostId,
     missionId: state.missionId,
     phaseStartedAt: state.phaseStartedAt,
@@ -206,6 +209,9 @@ function setPhase(state: GameState, phase: GamePhase, now: number): void {
   if (state.phase === phase) return
   state.phase = phase
   state.phaseStartedAt = now
+  // The static line is in place immediately; Gemini may replace it via narration:set.
+  state.narration = FALLBACK_NARRATION[phase]
+  state.narrationSource = 'fallback'
   emit(state, { type: 'game:advance', to: phase }, now)
 }
 
@@ -356,6 +362,8 @@ function newState(code: string, host: ServerPlayer, now: number): GameState {
     puzzle2: null,
     final: null,
     events: [],
+    narration: FALLBACK_NARRATION.LOBBY,
+    narrationSource: 'fallback',
   }
 }
 
@@ -401,6 +409,15 @@ function apply(
 
   if (command.type === 'tick') return { state, result: ok({}) }
   if (command.type === 'room:view') return { state, result: ok({ room: toView(state) }) }
+  if (command.type === 'narration:set') {
+    // A late Gemini reply for a phase the team has already left is dropped.
+    const applied = state.phase === command.phase
+    if (applied) {
+      state.narration = command.text
+      state.narrationSource = 'gemini'
+    }
+    return { state, result: ok({ applied }) }
+  }
 
   if (command.type === 'room:join') {
     if (command.rejoinTokenHash) {
@@ -499,9 +516,10 @@ function apply(
       state.clues = {}
       state.puzzle2 = null
       state.final = null
-      delete state.narration
       setPhase(state, 'LOBBY', now)
       recomputeLobby(state, now)
+      state.narration = FALLBACK_NARRATION[state.phase]
+      state.narrationSource = 'fallback'
       return { state, result: ok(room()) }
     }
 

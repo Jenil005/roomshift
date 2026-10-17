@@ -15,6 +15,7 @@ import type { MeData, SubmitData } from '@shared/events'
 import { MODULES } from '@shared/puzzles/commsBoot'
 import { nextDeadline, reduce, toView, type EngineCommand, type GameState } from './engine'
 import { PUZZLE1_SOLUTION } from './puzzle1'
+import { FALLBACK_NARRATION } from '../narration/fallback'
 
 const T0 = 1_000_000
 
@@ -349,6 +350,55 @@ describe('puzzle 1 (physical order)', () => {
     const res = g.run({ type: 'puzzle:submit', tokenHash: 'h1', puzzle: 1, physical }).result
     expect(res).toMatchObject({ ok: true, data: { solved: true, room: { puzzles: { 1: { verifiedBy: 'camera' } } } } })
     expect(g.state!.events.find((e) => e.type === 'puzzle:verified')).toMatchObject({ puzzle: 1, verifiedBy: 'camera' })
+  })
+})
+
+describe('narration', () => {
+  it('always has a fallback line, refreshed on every phase change', () => {
+    const g = game()
+    g.create()
+    expect(toView(g.state!)).toMatchObject({ narration: FALLBACK_NARRATION.LOBBY, narrationSource: 'fallback' })
+    g.join('Bea')
+    g.run({ type: 'room:ready', tokenHash: 'h0', ready: true })
+    g.run({ type: 'room:ready', tokenHash: 'h1', ready: true })
+    g.run({ type: 'game:start', tokenHash: 'h0' })
+    expect(toView(g.state!)).toMatchObject({ narration: FALLBACK_NARRATION.INTRO, narrationSource: 'fallback' })
+  })
+
+  it('applies a Gemini line only while the room is still in that phase', () => {
+    const g = startedGame()
+    expect(g.run({ type: 'narration:set', phase: 'INTRO', text: 'Sirens fade.' }).result).toMatchObject({
+      ok: true,
+      data: { applied: true },
+    })
+    expect(toView(g.state!)).toMatchObject({ narration: 'Sirens fade.', narrationSource: 'gemini' })
+    g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    // A slow reply for INTRO arriving during PUZZLE_1 is dropped.
+    expect(g.run({ type: 'narration:set', phase: 'INTRO', text: 'Too late.' }).result).toMatchObject({
+      ok: true,
+      data: { applied: false },
+    })
+    expect(toView(g.state!)).toMatchObject({ narration: FALLBACK_NARRATION.PUZZLE_1, narrationSource: 'fallback' })
+  })
+
+  it('narration never changes phase, systems or puzzles', () => {
+    const g = startedGame()
+    const before = toView(g.state!)
+    g.run({ type: 'narration:set', phase: 'INTRO', text: 'Mission complete. Door open. Puzzle solved.' })
+    const after = toView(g.state!)
+    expect({ ...after, narration: undefined, narrationSource: undefined, version: 0 }).toEqual({
+      ...before,
+      narration: undefined,
+      narrationSource: undefined,
+      version: 0,
+    })
+  })
+
+  it('reset restores the lobby fallback line', () => {
+    const g = startedGame()
+    g.run({ type: 'narration:set', phase: 'INTRO', text: 'Gemini line.' })
+    g.run({ type: 'game:reset', tokenHash: 'h0' })
+    expect(toView(g.state!)).toMatchObject({ narration: FALLBACK_NARRATION.LOBBY, narrationSource: 'fallback' })
   })
 })
 
