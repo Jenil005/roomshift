@@ -68,7 +68,7 @@ export interface SubmitData {
 export type ServerEvent =
   | { type: "game:state"; phase: GamePhase }
   | { type: "player:role"; playerId: string; role: RoleId }
-  | { type: "puzzle:verified"; puzzle: 1 | 2 }
+  | { type: "puzzle:verified"; puzzle: 1 | 2; verifiedBy?: "camera" | "manual" }
   | { type: "puzzle:failed"; puzzle: 1 | 2; reason: string; retryAfterMs?: number }
   | { type: "game:advance"; to: GamePhase }
   | { type: "game:complete" }

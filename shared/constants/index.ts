@@ -10,7 +10,10 @@ export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PLAYER_NAME_MAX_LENGTH = 20;
 
 // Physical objects for the P0 puzzle. Each gets a printed QR tag (marker id == object id).
+// The server matches ids case-insensitively (the AR module uses "BOOK", "CUP", "KEYS").
 export const OBJECT_IDS = ["book", "cup", "keys"] as const;
+// Camera evidence must show the arrangement held steady this long (matches ar/physicalOrder.ts).
+export const PUZZLE1_HOLD_MS = 1_200;
 
 // Placeholder role names: rename freely. Roles must differ per player (asymmetric clues).
 export const ROLE_IDS = ["engineer", "analyst", "operator", "scout"] as const;

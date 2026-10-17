@@ -37,6 +37,17 @@ export interface PuzzleProgress {
   attempts: number;
   lastFailure?: string;
   retryAt?: number; // server epoch ms before which a new submit is rejected
+  verifiedBy?: "camera" | "manual"; // puzzle 1: how the solve was evidenced
+}
+
+// Puzzle 1 evidence: the AR module's PhysicalPuzzleResult can be sent as-is (extra fields
+// such as `solved` and `detectedIds` are ignored). For source "camera" the server derives
+// the order from the marker centers itself and ignores `order`.
+export interface PhysicalEvidence {
+  source: "camera" | "manual";
+  order?: string[]; // left to right; used for "manual"
+  markers?: { id: string; center: { x: number; y: number } }[]; // normalized image coordinates
+  heldForMs?: number;
 }
 
 // Public room state. The backend mirrors this into the DeepSpace `rs_rooms` collection
@@ -90,5 +101,6 @@ export interface PuzzleSubmission {
   puzzle: 1 | 2;
   scanned?: ObjectId[]; // physical scan results
   manualCode?: string; // manual entry fallback if camera fails
+  physical?: PhysicalEvidence; // puzzle 1: preferred, the AR module's result
   order?: string[]; // puzzle 2 module ids, see shared/puzzles/commsBoot.ts
 }
