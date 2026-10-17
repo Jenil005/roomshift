@@ -8,5 +8,5 @@
     "skipLibCheck": true,
     "noEmit": true
   },
-  "include": ["types.ts", "templates", "room", "sync", "demo"]
+  "include": ["types.ts", "templates", "room", "sync", "demo/main.ts"]
 }
