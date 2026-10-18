@@ -22,7 +22,7 @@ const FLIP_ROWS = typeof location !== "undefined" && new URLSearchParams(locatio
  */
 export function useArScan(session: FacilitySession | null, enabled: boolean, ar: boolean, host: HostScans) {
   const model = useObjectDetector(enabled, loadPreferredDetector);
-  const { notice, hint, justScanned } = useScanNotices(host.scanned, host.notice);
+  const { notice, hint, justScanned } = useScanNotices(host.scanned, host.notice, host.pending);
   const [seeing, setSeeing] = useState<string[]>([]);
   const [scanner, setScanner] = useState<CameraFrameScanner | null>(null);
   // Frames arrive from the AR loop; they read the latest props through this ref.

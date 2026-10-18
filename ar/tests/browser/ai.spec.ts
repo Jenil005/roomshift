@@ -110,32 +110,35 @@ test("real COCO-SSD scans BOOK then CUP one at a time; scans persist off-frame; 
   await page
     .getByRole("button", { name: "Start AI camera" })
     .click({ timeout: 60_000 });
-  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible();
-  const list = page.getByLabel("Scanned objects");
-  const progress = page.getByRole("progressbar", { name: "Objects scanned" });
+  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible({ timeout: 20_000 });
+  const list = page.getByLabel("Scan checklist");
+  const progress = page.getByRole("progressbar", { name: "Signals verified" });
 
   // Two new objects in one frame: nothing is recorded, the player is asked for one.
   await expect(page.getByText(/IN VIEW — SCAN ONE OBJECT AT A TIME/)).toBeVisible({ timeout: 60_000 });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
   await expect(page.locator(".ai-overlay g.ai text").first()).toHaveText(/^(BOOK|CUP) \d{2,3}%$/);
 
-  // BOOK alone: scanned at once (no hold), with the next object named.
+  // BOOK alone: scanned at once (no hold); the notice counts signals, never names the next object.
+  // The notice shows for SCAN_NOTICE_HOLD_MS (2.5 s) and then yields to "ALREADY SCANNED", so
+  // it is awaited first: on a slow machine (1+ s per inference) it would otherwise be gone.
   await show(page, "book");
-  await expect(list.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("BOOK SCANNED ✓ — FIND THE CUP")).toBeVisible();
+  await expect(page.getByText("SIGNAL VERIFIED — 1/3")).toBeVisible({ timeout: 30_000 });
+  await expect(list.getByLabel("KNOWLEDGE: scanned")).toBeVisible();
   await expect(progress).toHaveAttribute("aria-valuenow", "1");
 
   // The book leaves the frame: it stays scanned.
   await show(page, "none");
   await page.waitForTimeout(1500);
-  await expect(list.getByLabel("BOOK: scanned")).toBeVisible();
+  await expect(list.getByLabel("KNOWLEDGE: scanned")).toBeVisible();
 
   // CUP alone, without the book in view.
   await show(page, "mug");
-  await expect(list.getByLabel("CUP: scanned")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("CUP SCANNED ✓ — FIND THE KEYBOARD")).toBeVisible();
-  await expect(list.getByLabel("BOOK: scanned")).toBeVisible();
-  await expect(list.getByLabel("KEYBOARD: not scanned")).toBeVisible();
+  await expect(page.getByText("SIGNAL VERIFIED — 2/3")).toBeVisible({ timeout: 30_000 });
+  await expect(list.getByLabel("CONTAINMENT: scanned")).toBeVisible();
+  await expect(page.getByText(/FIND THE/)).toHaveCount(0);
+  await expect(list.getByLabel("KNOWLEDGE: scanned")).toBeVisible();
+  await expect(list.getByLabel("ACCESS: not scanned")).toBeVisible();
 
   // BOOK again: a duplicate, not new progress.
   await show(page, "book");
@@ -147,7 +150,7 @@ test("real COCO-SSD scans BOOK then CUP one at a time; scans persist off-frame; 
   // survives the mode switch, and the AI camera is released first.
   await page.getByRole("button", { name: "QR backup" }).click();
   await expect.poll(() => tracksEnded(page)).toBe(true);
-  await expect(page.getByLabel("Scanned objects").getByLabel("CUP: scanned")).toBeVisible();
+  await expect(page.getByLabel("Scan checklist").getByLabel("CONTAINMENT: scanned")).toBeVisible();
   await show(page, "keyboard-tag");
   await page.getByRole("button", { name: /Enable camera/ }).click();
   await expect(
@@ -166,9 +169,9 @@ test("an out-of-sequence first scan is rejected and resets the local attempt", a
   await page.goto("/");
   await page.getByRole("button", { name: "Start AI camera" }).click({ timeout: 60_000 });
   await expect(page.getByText("CUP SCANNED OUT OF SEQUENCE — START AGAIN")).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByRole("progressbar", { name: "Objects scanned" })).toHaveAttribute("aria-valuenow", "0");
+  await expect(page.getByRole("progressbar", { name: "Signals verified" })).toHaveAttribute("aria-valuenow", "0");
   await show(page, "book");
-  await expect(page.getByLabel("Scanned objects").getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByLabel("Scan checklist").getByLabel("KNOWLEDGE: scanned")).toBeVisible({ timeout: 30_000 });
 });
 
 test("a model that fails to load offers QR Backup immediately", async ({ page }) => {
@@ -213,7 +216,7 @@ test("switching from AI to QR backup and to manual releases the camera", async (
   await page
     .getByRole("button", { name: "Start AI camera" })
     .click({ timeout: 60_000 });
-  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible();
+  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "QR backup" }).click();
   await expect.poll(() => tracksEnded(page)).toBe(true);
   await page.getByRole("button", { name: "Enable camera" }).click();
@@ -225,7 +228,7 @@ test("switching from AI to QR backup and to manual releases the camera", async (
     timeout: 2000,
   });
   await page.getByRole("button", { name: "Start AI camera" }).click();
-  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible();
+  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.getByRole("button", { name: "Manual demo", exact: true }).click();
   await expect.poll(() => tracksEnded(page)).toBe(true);
   expect(await page.evaluate(() => (window as CameraWindow).cameraCalls)).toBe(3);
@@ -240,7 +243,7 @@ test("hiding the page stops the AI camera and needs an explicit restart", async 
   await page
     .getByRole("button", { name: "Start AI camera" })
     .click({ timeout: 60_000 });
-  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible();
+  await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => {
     Object.defineProperty(document, "hidden", {
       configurable: true,

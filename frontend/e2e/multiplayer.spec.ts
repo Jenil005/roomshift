@@ -130,28 +130,28 @@ test("two browsers play a full live mission: private clues, rejoin, sequential o
 
   // A scans one object at a time. COCO-SSD recognizes the real book, then the real mug.
   const view = (v: string) => a.evaluate((x) => ((window as unknown as { view: string }).view = x), v);
-  const scannedA = a.getByLabel("Scanned objects");
+  const scannedA = a.getByLabel("Scan checklist");
   await expect(a.getByRole("button", { name: /Start AI camera/ })).toBeVisible({ timeout: 60_000 });
   await a.getByRole("button", { name: /Start AI camera/ }).click();
   await view("book");
-  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 60_000 });
-  await expect(scannedA.getByLabel("BOOK: scanned")).not.toContainText("SAVING", { timeout: 15_000 }); // server accepted
+  await expect(scannedA.getByLabel("KNOWLEDGE: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(scannedA.getByLabel("KNOWLEDGE: scanned")).not.toContainText("SAVING", { timeout: 15_000 }); // server accepted
   // A reloads the page: the seat comes back and BOOK is still scanned (stored on the server).
   await a.reload();
-  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
-  await expect(scannedA.getByLabel("CUP: not scanned")).toBeVisible();
+  await expect(scannedA.getByLabel("KNOWLEDGE: scanned")).toBeVisible({ timeout: 30_000 });
+  await expect(scannedA.getByLabel("CONTAINMENT: not scanned")).toBeVisible();
   await a.getByRole("button", { name: /Start AI camera/ }).click({ timeout: 60_000 });
   await view("mug");
-  await expect(scannedA.getByLabel("CUP: scanned")).toBeVisible({ timeout: 60_000 });
-  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible(); // still scanned, out of view
+  await expect(scannedA.getByLabel("CONTAINMENT: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(scannedA.getByLabel("KNOWLEDGE: scanned")).toBeVisible(); // still scanned, out of view
   // B's phone shows the shared progress from the server (in the facility HUD).
   await b.getByRole("button", { name: /FACILITY/ }).click();
-  await expect(b.getByText("✓ CUP SCANNED")).toBeVisible({ timeout: 15_000 });
-  await expect(b.getByText("○ KEYBOARD NOT SCANNED")).toBeVisible();
+  await expect(b.getByText("✓ CONTAINMENT SCANNED")).toBeVisible({ timeout: 15_000 });
+  await expect(b.getByText("○ ACCESS NOT SCANNED")).toBeVisible();
   await b.getByRole("button", { name: "BACK TO MISSION" }).click();
   // No keyboard photo fixture yet: A finishes with the KEYBOARD tag in QR backup.
   await a.getByRole("button", { name: "QR backup" }).click();
-  await expect(scannedA.getByLabel("CUP: scanned")).toBeVisible(); // progress survives the mode switch
+  await expect(scannedA.getByLabel("CONTAINMENT: scanned")).toBeVisible(); // progress survives the mode switch
   await view("keyboard-tag");
   await a.getByRole("button", { name: /Enable camera/ }).click();
   await expect(a.getByText("BREAKER RESTORED — PUZZLE COMPLETE")).toBeVisible({ timeout: 60_000 });

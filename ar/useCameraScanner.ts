@@ -9,13 +9,13 @@ type CameraState = {
 
 export const SCAN_ERROR_MESSAGE: Record<ScanErrorCode, string> = {
   denied:
-    "Camera access was blocked. Allow camera access in your browser settings, then try again. You can also use the manual demo.",
+    "Camera access was blocked. Allow camera access for this site (the camera icon in the address bar on a laptop, or your phone's browser settings), then try again. You can also use the manual option.",
   "no-camera":
-    "No camera was found. Connect a camera or use the manual demo.",
+    "No camera was found. Connect or enable a webcam (on Windows, check Settings > Privacy > Camera), or use the manual option.",
   "insecure-context":
-    "Camera access requires HTTPS. Open a secure deployment, or use the manual demo.",
+    "Camera access requires HTTPS (or localhost). Open a secure deployment, or use the manual option.",
   unknown:
-    "The camera could not start. Close other apps using it and try again, or use the manual demo.",
+    "The camera could not start. Close other apps using it (video calls, the Camera app) and try again, or use the manual option.",
 };
 
 export function cameraErrorMessage(error: unknown): string {

@@ -181,16 +181,16 @@ test("scan in AR: objects are scanned from the AR camera feed without leaving AR
 
   const card = a.getByLabel("Object scan progress");
   await arCameraSees(a, "book");
-  await expect(card.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 60_000 });
-  await expect(a.getByText("BOOK SCANNED ✓ — FIND THE CUP")).toBeVisible();
+  await expect(card.getByLabel("KNOWLEDGE: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(a.getByText("SIGNAL VERIFIED — 1/3")).toBeVisible();
   await expect(a.getByText(/SEEING: BOOK \d+%/)).toBeVisible();
 
   await arCameraSees(a, "none");
   await a.waitForTimeout(1000);
   await arCameraSees(a, "mug");
-  await expect(card.getByLabel("CUP: scanned")).toBeVisible({ timeout: 60_000 });
-  await expect(card.getByLabel("BOOK: scanned")).toBeVisible(); // stays scanned out of view
-  await expect(card.getByLabel("KEYBOARD: not scanned")).toBeVisible();
+  await expect(card.getByLabel("CONTAINMENT: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(card.getByLabel("KNOWLEDGE: scanned")).toBeVisible(); // stays scanned out of view
+  await expect(card.getByLabel("ACCESS: not scanned")).toBeVisible();
   await a.screenshot({ path: "test-results/facility-scan-in-ar.png" });
 
   // AR kept running the whole time, the facility stayed placed, and no second camera opened.
@@ -200,7 +200,7 @@ test("scan in AR: objects are scanned from the AR camera feed without leaving AR
   expect(await a.evaluate(() => (window as unknown as DebugWindow).gumCalls)).toBe(0);
 
   // The progress is the server's: B's scanner shows it too.
-  await expect(b.getByLabel("Scanned objects").getByLabel("CUP: scanned")).toBeVisible({ timeout: 15_000 });
+  await expect(b.getByLabel("Scan checklist").getByLabel("CONTAINMENT: scanned")).toBeVisible({ timeout: 15_000 });
 
   // STOP SCANNING removes the frame tap (no more pixel reads).
   await a.getByRole("button", { name: "STOP SCANNING" }).click();

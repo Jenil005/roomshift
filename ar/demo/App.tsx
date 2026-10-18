@@ -139,9 +139,10 @@ function Mission({ onReset }: { onReset: () => void }) {
               <div>
                 <h3>Make the physical connection.</h3>
                 <p>
-                  Find a book, a cup and a keyboard, then scan them one at a
-                  time in the order the clues describe. No QR code needed;
-                  printed tags are an optional backup.
+                  Gather the three objects your clues describe, then scan them
+                  one at a time. Use your team's clues to determine the correct
+                  scanning sequence. No QR code needed; printed tags are an
+                  optional backup.
                 </p>
               </div>
               <a

@@ -26,9 +26,12 @@ export {
   addedScans,
   alreadyScannedText,
   decideFrame,
+  CHECKLIST_ORDER,
+  CLUE_LABEL,
   LocalScanJudge,
-  scannedText,
   SCAN_COMPLETE_TEXT,
+  SEQUENCE_HINT_TEXT,
+  signalVerifiedText,
   type FrameDecision,
 } from "./scan/objectScan";
 export { CameraScanSession, scanErrorCode } from "./scan/CameraScanSession";

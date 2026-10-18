@@ -1,10 +1,12 @@
 import { AiScanner } from "./AiScanner";
+import { useCameraStage } from "./cameraLayout";
 import { ArrowUpRight } from "./components/ArrowUpRight";
 import type { ObjectDetector } from "./detect/ObjectDetector";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScanProgress, useScanNotices } from "./ScanProgress";
 import {
   alreadyScannedText,
+  CHECKLIST_ORDER,
   crowdedText,
   decideFrame,
   LocalScanJudge,
@@ -193,7 +195,7 @@ function QrScanner({
   const [enabled, setEnabled] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [markers, setMarkers] = useState<DetectedMarker[]>([]);
-  const { notice, hint, justScanned } = useScanNotices(scanned, hostNotice);
+  const { notice, hint, justScanned } = useScanNotices(scanned, hostNotice, pending);
   const complete = scanned.length >= MARKER_IDS.length;
   const latest = useRef({ scanned, paused, complete, onObjectScanned, hint });
   latest.current = { scanned, paused, complete, onObjectScanned, hint };
@@ -236,6 +238,9 @@ function QrScanner({
     }
   }, [complete]);
 
+  // object-fit: cover crops the frame; markers are mapped through the same cover transform.
+  const { style: stageStyle, toView } = useCameraStage(camera.videoRef, live);
+
   const start = () => {
     setMarkers([]);
     lastReport.current = null;
@@ -244,89 +249,96 @@ function QrScanner({
   };
 
   return (
-    <>
-      <div className={`camera-stage ${live ? "is-live" : ""}`}>
-        <video ref={camera.videoRef} muted playsInline aria-label="Live rear camera feed" />
-        {live && (
-          <svg className="marker-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
-            {markers.map((marker, index) => (
-              <g key={`${marker.id}-${index}`} className={scanned.includes(marker.id) ? "scanned" : ""}>
-                <polygon points={marker.corners.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")} />
-                <text
-                  x={marker.center.x * 1000}
-                  y={Math.max(36, Math.min(...marker.corners.map((p) => p.y)) * 1000 - 15)}
-                  textAnchor="middle"
-                >
-                  {MARKER_LABEL[marker.id]}
-                  {scanned.includes(marker.id) ? " ✓" : ""}
-                </text>
-              </g>
-            ))}
-          </svg>
-        )}
-        {!live && (
-          <div className="camera-placeholder">
-            <div className="scan-symbol" aria-hidden="true">
-              {complete ? "✓" : "⌗"}
+    <div className="scan-layout">
+      <div className="scan-camera-col">
+        <div className={`camera-stage ${live ? "is-live" : ""}`} style={stageStyle}>
+          <video ref={camera.videoRef} muted playsInline aria-label="Live camera feed" />
+          {live && (
+            <svg className="marker-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+              {markers.map((marker, index) => {
+                const corners = marker.corners.map(toView);
+                return (
+                  <g key={`${marker.id}-${index}`} className={scanned.includes(marker.id) ? "scanned" : ""}>
+                    <polygon points={corners.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")} />
+                    <text
+                      x={toView(marker.center).x * 1000}
+                      y={Math.max(36, Math.min(...corners.map((p) => p.y)) * 1000 - 15)}
+                      textAnchor="middle"
+                    >
+                      {MARKER_LABEL[marker.id]}
+                      {scanned.includes(marker.id) ? " ✓" : ""}
+                    </text>
+                  </g>
+                );
+              })}
+            </svg>
+          )}
+          {!live && (
+            <div className="camera-placeholder">
+              <div className="scan-symbol" aria-hidden="true">
+                {complete ? "✓" : "⌗"}
+              </div>
+              <h3>
+                {complete
+                  ? "All three objects scanned."
+                  : camera.status === "starting"
+                    ? "Connecting to your camera"
+                    : "Scan one tag at a time."}
+              </h3>
+              <p>
+                {complete
+                  ? "The camera is off. The facility is checking the sequence."
+                  : camera.status === "starting"
+                    ? "Allow camera access when your browser asks."
+                    : "Place a printed tag on each object, then point the camera at one tag at a time."}
+              </p>
+              {!complete && (camera.status === "idle" || camera.status === "error") && (
+                <button className="button primary" onClick={start}>
+                  {camera.status === "error" ? "Try camera again" : "Enable camera"}{" "}
+                  <span aria-hidden="true">
+                    <ArrowUpRight />
+                  </span>
+                </button>
+              )}
             </div>
-            <h3>
-              {complete
-                ? "All three objects scanned."
-                : camera.status === "starting"
-                  ? "Connecting to your camera"
-                  : "Scan one tag at a time."}
-            </h3>
-            <p>
-              {complete
-                ? "The camera is off. The facility is checking the sequence."
-                : camera.status === "starting"
-                  ? "Allow camera access when your browser asks."
-                  : "Place a printed tag on each object, then point the camera at one tag at a time."}
-            </p>
-            {!complete && (camera.status === "idle" || camera.status === "error") && (
-              <button className="button primary" onClick={start}>
-                {camera.status === "error" ? "Try camera again" : "Enable camera"}{" "}
-                <span aria-hidden="true">
-                  <ArrowUpRight />
-                </span>
-              </button>
-            )}
-          </div>
-        )}
-        {live && (
-          <div className="camera-caption">
-            <span>ONE TAG AT A TIME</span>
-            <span>REAR CAMERA</span>
-          </div>
+          )}
+          {live && (
+            <div className="camera-caption">
+              <span>ONE TAG AT A TIME</span>
+              <span>CAMERA</span>
+            </div>
+          )}
+        </div>
+        {camera.status === "error" && (
+          <p role="alert" className="error-message">
+            {camera.message}
+          </p>
         )}
       </div>
-      {camera.status === "error" && (
-        <p role="alert" className="error-message">
-          {camera.message}
+      <div className="scan-side">
+        <ScanProgress
+          scanned={scanned}
+          pending={pending}
+          notice={notice}
+          idleText={complete ? "ALL OBJECTS SCANNED" : live ? (paused ? "BREAKER RESETTING" : "POINT AT ONE TAG") : "QR BACKUP"}
+          justScanned={justScanned}
+          onRestart={onRestart}
+        />
+        <p className="guidance" role="status">
+          {live ? "Scanned objects stay scanned. Low light? Turn on a lamp or move closer." : "Camera images are processed on your device."}
         </p>
-      )}
-      <ScanProgress
-        scanned={scanned}
-        pending={pending}
-        notice={notice}
-        idleText={complete ? "ALL OBJECTS SCANNED" : live ? (paused ? "BREAKER RESETTING" : "POINT AT ONE TAG") : "QR BACKUP"}
-        justScanned={justScanned}
-        onRestart={onRestart}
-      />
-      <p className="guidance" role="status">
-        {live ? "Scanned objects stay scanned. Low light? Turn on a lamp or move closer." : "Camera images are processed on your device."}
-      </p>
-      {live && camera.torch.supported && (
-        <button className="text-button" aria-pressed={camera.torch.on} onClick={() => void camera.torch.toggle()}>
-          {camera.torch.on ? "Torch off" : "Torch on"}
-        </button>
-      )}
-      {(live || camera.status === "starting") && (
-        <button className="text-button" onClick={() => setEnabled(false)}>
-          Stop camera
-        </button>
-      )}
-    </>
+        {live && camera.torch.supported && (
+          <button className="text-button" aria-pressed={camera.torch.on} onClick={() => void camera.torch.toggle()}>
+            {camera.torch.on ? "Torch off" : "Torch on"}
+          </button>
+        )}
+        {(live || camera.status === "starting") && (
+          <button className="text-button" onClick={() => setEnabled(false)}>
+            Stop camera
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -384,7 +396,7 @@ function ManualOrder({
               }}
             >
               <option value="">Select object</option>
-              {MARKER_IDS.map((id) => (
+              {CHECKLIST_ORDER.map((id) => (
                 <option key={id} value={id}>
                   {MARKER_LABEL[id]}
                 </option>

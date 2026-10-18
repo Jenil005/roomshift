@@ -141,7 +141,7 @@ test("QR backup scans one tag at a time: crowded frames wait, wrong order resets
   // All three tags at once: decoded and drawn, but nothing is recorded.
   await expect(page.locator(".marker-overlay polygon")).toHaveCount(3, { timeout: 15000 });
   await expect(page.getByText(/IN VIEW — SCAN ONE OBJECT AT A TIME/)).toBeVisible();
-  const progress = page.getByRole("progressbar", { name: "Objects scanned" });
+  const progress = page.getByRole("progressbar", { name: "Signals verified" });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
   // Decoding runs in a web worker.
   expect(
@@ -156,14 +156,14 @@ test("QR backup scans one tag at a time: crowded frames wait, wrong order resets
   await expect(page.getByText("CUP SCANNED OUT OF SEQUENCE — START AGAIN")).toBeVisible({ timeout: 15000 });
   await expect(progress).toHaveAttribute("aria-valuenow", "0");
 
-  const list = page.getByLabel("Scanned objects");
+  const list = page.getByLabel("Scan checklist");
   await showTags(["book"]);
-  await expect(list.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 15000 });
+  await expect(list.getByLabel("KNOWLEDGE: scanned")).toBeVisible({ timeout: 15000 });
   await showTags([]);
   await page.waitForTimeout(1000);
-  await expect(list.getByLabel("BOOK: scanned")).toBeVisible(); // off-frame, still scanned
+  await expect(list.getByLabel("KNOWLEDGE: scanned")).toBeVisible(); // off-frame, still scanned
   await showTags(["book", "cup"]); // BOOK is already scanned, so CUP is the one new tag
-  await expect(list.getByLabel("CUP: scanned")).toBeVisible({ timeout: 15000 });
+  await expect(list.getByLabel("CONTAINMENT: scanned")).toBeVisible({ timeout: 15000 });
   await page.screenshot({
     path: "test-results/camera-puzzle.png",
     fullPage: true,

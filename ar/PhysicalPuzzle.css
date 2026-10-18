@@ -128,18 +128,25 @@
     linear-gradient(90deg, #273b2829 1px, transparent 1px);
   background-size: 40px 40px;
 }
+/* Live: the stage takes the stream's aspect ratio (--camera-ar, clamped 3:4 to 16:9 by
+   cameraLayout.ts) up to --camera-max-h. The video covers the stage without stretching;
+   overlays use the same cover transform, so boxes stay on the objects. */
 .scanner-panel .camera-stage.is-live {
   min-height: 0;
+  width: 100%; /* explicit: otherwise max-height would shrink the width through the ratio */
+  aspect-ratio: var(--camera-ar, 4 / 3);
+  max-height: var(--camera-max-h);
 }
 .scanner-panel .camera-stage video {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
-  height: auto;
-  grid-area: 1/1;
+  height: 100%;
+  object-fit: cover;
 }
 .scanner-panel .camera-stage:not(.is-live) video {
   visibility: hidden;
-  height: 310px;
 }
 .scanner-panel .camera-placeholder {
   grid-area: 1/1;
@@ -350,9 +357,6 @@
   .scanner-panel .camera-stage {
       min-height: 270px;
   }
-  .scanner-panel .camera-stage:not(.is-live) video {
-      height: 300px;
-  }
   .scanner-panel .camera-placeholder {
       padding: 26px 20px;
   }
@@ -517,6 +521,128 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .scanner-panel .scan-chip.just-scanned {
+    animation: none;
+  }
+}
+
+/* Responsive scanner layout. Narrow panels (phones in portrait): camera, then the checklist
+   and controls, with the camera capped so the checklist stays close. Wide panels (laptops,
+   desktops, phones in landscape): camera left, checklist and controls right. Columns follow
+   the panel's own width (container query), so any host page lays it out correctly. */
+.scanner-panel {
+  --camera-max-h: min(48dvh, 440px);
+  max-width: 100%;
+  container-type: inline-size;
+}
+.scanner-panel .scan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.scanner-panel .scan-camera-col,
+.scanner-panel .scan-side {
+  min-width: 0;
+}
+.scanner-panel .scan-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding-bottom: 10px;
+}
+.scanner-panel .scan-side > .scan-feedback {
+  align-self: stretch;
+}
+.scanner-panel .scan-side > .guidance,
+.scanner-panel .scan-side > .text-button {
+  margin-inline: 26px;
+}
+.scanner-panel .scan-side > .guidance {
+  margin-top: 0;
+}
+/* The checklist is a stacked list: clue word left, state right. */
+.scanner-panel .scan-list {
+  flex-direction: column;
+  gap: 6px;
+}
+.scanner-panel .scan-list .scan-chip {
+  flex-wrap: nowrap;
+  padding: 9px 12px;
+  font-size: 12px;
+}
+.scanner-panel .scan-list .scan-chip > span {
+  margin-left: 0;
+}
+.scanner-panel .scan-clue {
+  overflow-wrap: anywhere;
+}
+.scanner-panel .scan-chip.is-pending {
+  border-color: #5f7a8a;
+  border-style: dashed;
+  color: #b9d3df;
+  background: #142128;
+}
+.scanner-panel .scan-chip.is-pending .scan-check {
+  animation: scan-saving 1.2s linear infinite;
+}
+@keyframes scan-saving {
+  50% { opacity: 0.35; }
+}
+.scanner-panel .scan-track {
+  display: flex;
+}
+.scanner-panel .scan-track > .scan-track-pending {
+  background: repeating-linear-gradient(90deg, #5f7a8a 0 6px, transparent 6px 10px);
+}
+@media (max-width: 760px) {
+  .scanner-panel .scan-side > .guidance,
+  .scanner-panel .scan-side > .text-button {
+    margin-inline: 18px;
+  }
+}
+/* Very short portrait screens: keep the camera compact. */
+@media (max-height: 640px) and (orientation: portrait) {
+  .scanner-panel {
+    --camera-max-h: min(40dvh, 300px);
+  }
+}
+@container (min-width: 620px) {
+  .scanner-panel .scan-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(250px, 2fr);
+    align-items: start;
+    border-top: 1px solid #2d3a2b;
+  }
+  .scanner-panel .camera-stage {
+    border-top: 0;
+    border-right: 1px solid #2d3a2b;
+  }
+  .scanner-panel .scan-side > .scan-feedback {
+    padding-top: 18px;
+  }
+}
+@media (min-width: 900px) {
+  .scanner-panel {
+    --camera-max-h: max(280px, calc(100dvh - 300px));
+  }
+}
+/* Phones in landscape: the camera fits the visible height once scrolled to. */
+@media (orientation: landscape) and (max-height: 540px) {
+  .scanner-panel {
+    --camera-max-h: max(180px, calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  }
+  .scanner-panel .panel-heading {
+    padding: 12px 18px 10px;
+  }
+  .scanner-panel .mode-switch {
+    padding-bottom: 10px;
+  }
+  .scanner-panel .camera-stage:not(.is-live) {
+    min-height: 220px;
+  }
+  .scanner-panel .camera-placeholder {
+    padding: 16px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-panel .scan-chip.is-pending .scan-check {
     animation: none;
   }
 }

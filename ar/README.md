@@ -64,8 +64,12 @@ Phones need HTTPS for the camera and motion sensors; a plain `http://` LAN addre
 
 - `decideFrame`: exactly one new confident object in the frame is reported (`onObjectScanned`); an already scanned object in view shows "BOOK ALREADY SCANNED"; two or more new objects at once record nothing and ask for one at a time, so a crowded frame cannot scan them in an accidental order.
 - Progress (`scanned`) is owned by the host: in the game, the server's accepted scans plus this phone's queued ones; in the standalone demo, `LocalScanJudge` applies the same sequence rule.
-- Messages: "BOOK SCANNED ✓ — FIND THE CUP", "CUP SCANNED ✓ — FIND THE KEYBOARD", "KEYBOARD SCANNED ✓ — VERIFYING SEQUENCE", then "BREAKER RESTORED — PUZZLE COMPLETE" only after the server accepts the sequence.
+- No answer leaks: the checklist shows each object's clue word (`CLUE_LABEL`: book → KNOWLEDGE, cup → CONTAINMENT, keyboard → ACCESS) in a fixed order that is not the solution (`CHECKLIST_ORDER`: ACCESS, CONTAINMENT, KNOWLEDGE), and no message names the next object. Ids, detector classes and the server are unchanged; the camera overlay still shows the detector's real class (BOOK, CUP) as scanning feedback.
+- Checklist states: NOT SCANNED, SAVING… (queued on this phone, not yet accepted) and SCANNED ✓ (accepted). Progress k/3 counts accepted scans only.
+- Messages: "SIGNAL DETECTED — SAVING…" when queued, "SIGNAL VERIFIED — k/3" once accepted, then "BREAKER RESTORED — PUZZLE COMPLETE" only after the server accepts the sequence.
 - The camera stops once all three are scanned.
+
+**Camera layout** (`cameraLayout.ts`, `PhysicalPuzzle.css`): the stage takes the stream's aspect ratio clamped to 3:4..16:9 (portrait phone streams get 3:4, laptop webcams 16:9), capped in height; the video uses `object-fit: cover` and overlays go through the same `coverTransform`, so boxes stay on the objects. The panel switches to camera-left / checklist-right at 620 px panel width (container query). `requestCamera` prefers the rear camera (`facingMode: ideal`) and retries with any camera if a webcam rejects the size hints.
 
 **Status messages:** INITIALIZING AI, CAMERA READY, POINT AT ONE OBJECT, OBJECT NOT RECOGNIZED, the scan messages above, BREAKER RESETTING, SWITCH TO QR BACKUP. Confidence values on screen are the model's real scores.
 
