@@ -72,6 +72,9 @@ export function engineServer(now: () => number = Date.now, random: () => number 
       case "final:press":
         command = { type: body.type, tokenHash, held: body.held };
         break;
+      case "demo:pause":
+        command = { type: body.type, tokenHash, paused: body.paused };
+        break;
       default:
         command = { type: body.type, tokenHash };
     }

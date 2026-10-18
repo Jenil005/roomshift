@@ -15,10 +15,10 @@ import {
   FINAL_FORCE_AFTER_MS,
   FINAL_SYNC_WINDOW_MS,
   HOST_HANDOFF_AFTER_MS,
-  INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
   MIN_PLAYERS,
+  MISSION_DURATION_MS,
   MISSION_ID,
   PHASE_COMPLETE_HOLD_MS,
   PLAYER_NAME_MAX_LENGTH,
@@ -41,6 +41,7 @@ import type {
 import { checkOrder, describe, generatePuzzle, MODULES, type ModuleId } from '@shared/puzzles/commsBoot'
 import type {
   GamePhase,
+  MissionClock,
   ObjectScan,
   PhysicalEvidence,
   Player,
@@ -103,6 +104,8 @@ export interface GameState {
   puzzle1?: { scans: ObjectScan[] } | null
   puzzle2: Puzzle2State | null
   final: FinalState | null
+  // Mission countdown from the start of PUZZLE_1. Optional: older stored rooms have none.
+  mission?: MissionClock | null
   events: RoomEventEntry[]
   narration?: string
   narrationSource?: 'gemini' | 'fallback'
@@ -139,6 +142,10 @@ export type EngineCommand =
   | ({ type: 'puzzle2:draft'; order: string[] } & Authed)
   | ({ type: 'final:press'; held: boolean } & Authed)
   | ({ type: 'final:force' } & Authed)
+  | ({ type: 'demo:skip' } & Authed)
+  | ({ type: 'demo:pause'; paused: boolean } & Authed)
+  | ({ type: 'demo:win' } & Authed)
+  | ({ type: 'demo:fail' } & Authed)
   | { type: 'tick' } // timers: presence, auto-advance, idle cleanup
   | { type: 'room:view' } // unauthenticated read of the public view (GET /api/game/room/:code)
   | { type: 'narration:set'; phase: GamePhase; text: string } // internal only: Gemini result
@@ -203,6 +210,7 @@ export function toView(state: GameState): Room {
           },
         }
       : {}),
+    ...(state.mission ? { mission: state.mission } : {}),
   }
 }
 
@@ -281,11 +289,52 @@ function enterFinal(state: GameState, now: number): void {
   setPhase(state, 'FINAL_SEQUENCE', now)
 }
 
+/** INTRO -> PUZZLE_1: the mission clock starts here. */
+function startPuzzle1(state: GameState, now: number): void {
+  state.mission = { startedAt: now, durationMs: MISSION_DURATION_MS, pausedMs: 0 }
+  setPhase(state, 'PUZZLE_1', now)
+}
+
+/** Stops the mission clock where it is (the game is over). */
+function freezeClock(state: GameState, now: number): void {
+  if (state.mission && state.mission.pausedAt === undefined) state.mission.pausedAt = now
+}
+
 function completeGame(state: GameState, now: number): void {
   state.systems.door = true
   state.final = null
+  freezeClock(state, now)
   emit(state, { type: 'game:complete' }, now)
   setPhase(state, 'COMPLETE', now)
+}
+
+/** Phases a demo tool can act on: from the role reveal to the final hold. */
+const DEMO_PHASES: ReadonlySet<GamePhase> = new Set([
+  'INTRO',
+  'PUZZLE_1',
+  'PUZZLE_1_COMPLETE',
+  'PUZZLE_2',
+  'PUZZLE_2_COMPLETE',
+  'FINAL_SEQUENCE',
+])
+
+/** demo:skip: finish the current stage as if the team had done it, and move on. */
+function skipStage(state: GameState, ctx: EngineContext): void {
+  const { now } = ctx
+  switch (state.phase) {
+    case 'INTRO':
+      return startPuzzle1(state, now)
+    case 'PUZZLE_1':
+      return solvePuzzle1(state, undefined, now)
+    case 'PUZZLE_1_COMPLETE':
+      return enterPuzzle2(state, ctx)
+    case 'PUZZLE_2':
+      return solvePuzzle2(state, now)
+    case 'PUZZLE_2_COMPLETE':
+      return enterFinal(state, now)
+    case 'FINAL_SEQUENCE':
+      return completeGame(state, now)
+  }
 }
 
 /** Every connected player is holding (a release within the sync window still counts). */
@@ -327,7 +376,7 @@ function applyTimers(state: GameState, ctx: EngineContext): GameState | null {
   }
   handOffHostIfGone(state, now)
   const elapsed = now - state.phaseStartedAt
-  if (state.phase === 'INTRO' && elapsed >= INTRO_DURATION_MS) setPhase(state, 'PUZZLE_1', now)
+  // INTRO has no timer: it waits for the host's intro:skip ("Proceed").
   if (state.phase === 'PUZZLE_1_COMPLETE' && elapsed >= PHASE_COMPLETE_HOLD_MS) enterPuzzle2(state, ctx)
   if (state.phase === 'PUZZLE_2_COMPLETE' && elapsed >= PHASE_COMPLETE_HOLD_MS) enterFinal(state, now)
   // A player who drops mid-hold stops counting, so the others may already be enough.
@@ -343,7 +392,6 @@ export function nextDeadline(state: GameState | null): number | null {
     if (p.connected) times.push(p.lastSeen + DISCONNECT_AFTER_MS + 1)
     else if (inLobby(state)) times.push(p.lastSeen + LOBBY_DROP_AFTER_MS + 1)
   }
-  if (state.phase === 'INTRO') times.push(state.phaseStartedAt + INTRO_DURATION_MS)
   const host = state.players.find((p) => p.id === state.hostId)
   if (host && !host.connected && state.players.some((p) => p.connected)) {
     times.push(host.lastSeen + HOST_HANDOFF_AFTER_MS + 1)
@@ -534,6 +582,7 @@ function apply(
       state.puzzle1 = null
       state.puzzle2 = null
       state.final = null
+      state.mission = null
       setPhase(state, 'LOBBY', now)
       recomputeLobby(state, now)
       state.narration = FALLBACK_NARRATION[state.phase]
@@ -542,9 +591,9 @@ function apply(
     }
 
     case 'intro:skip': {
-      if (!isHost) return { state, result: fail('not_host', 'Only the host can skip the intro') }
+      if (!isHost) return { state, result: fail('not_host', 'Only the host can proceed') }
       if (state.phase !== 'INTRO') return { state, result: fail('wrong_phase', 'The intro is not playing') }
-      setPhase(state, 'PUZZLE_1', now)
+      startPuzzle1(state, now)
       return { state, result: ok(room()) }
     }
 
@@ -589,6 +638,36 @@ function apply(
       const waitMs = state.phaseStartedAt + FINAL_FORCE_AFTER_MS - now
       if (waitMs > 0) return { state, result: fail('cooldown', 'Keep trying together first', waitMs) }
       completeGame(state, now)
+      return { state, result: ok(room()) }
+    }
+
+    case 'demo:skip':
+    case 'demo:pause':
+    case 'demo:win':
+    case 'demo:fail': {
+      if (!isHost) return { state, result: fail('not_host', 'Only the host can use demo tools') }
+      if (!DEMO_PHASES.has(state.phase)) return { state, result: fail('wrong_phase', 'No mission is running') }
+      if (command.type === 'demo:skip') {
+        skipStage(state, ctx)
+      } else if (command.type === 'demo:pause') {
+        const clock = state.mission
+        if (!clock) return { state, result: fail('wrong_phase', 'The mission clock starts with puzzle 1') }
+        if (command.paused && clock.pausedAt === undefined) {
+          clock.pausedAt = now
+        } else if (!command.paused && clock.pausedAt !== undefined) {
+          clock.pausedMs += now - clock.pausedAt
+          delete clock.pausedAt
+        }
+      } else if (command.type === 'demo:win') {
+        state.systems = { breaker: true, terminal: true, door: true }
+        state.puzzles[1].solved = true
+        state.puzzles[2].solved = true
+        completeGame(state, now)
+      } else {
+        state.final = null
+        freezeClock(state, now)
+        setPhase(state, 'FAILED', now)
+      }
       return { state, result: ok(room()) }
     }
   }
@@ -666,15 +745,26 @@ function failPuzzle1(state: GameState, reason: string, now: number): void {
   emit(state, { type: 'puzzle:failed', puzzle: 1, reason, retryAfterMs: PUZZLE1_COOLDOWN_MS }, now)
 }
 
-function solvePuzzle1(state: GameState, verifiedBy: VerifiedBy, now: number): void {
+/** `verifiedBy` is undefined when the host skipped the puzzle (demo:skip). */
+function solvePuzzle1(state: GameState, verifiedBy: VerifiedBy | undefined, now: number): void {
   const progress = state.puzzles[1]
   progress.solved = true
-  progress.verifiedBy = verifiedBy
+  if (verifiedBy) progress.verifiedBy = verifiedBy
   delete progress.lastFailure
   delete progress.retryAt
   state.systems.breaker = true
-  emit(state, { type: 'puzzle:verified', puzzle: 1, verifiedBy }, now)
+  emit(state, verifiedBy ? { type: 'puzzle:verified', puzzle: 1, verifiedBy } : { type: 'puzzle:verified', puzzle: 1 }, now)
   setPhase(state, 'PUZZLE_1_COMPLETE', now)
+}
+
+function solvePuzzle2(state: GameState, now: number): void {
+  const progress = state.puzzles[2]
+  progress.solved = true
+  delete progress.lastFailure
+  delete progress.retryAt
+  state.systems.terminal = true
+  emit(state, { type: 'puzzle:verified', puzzle: 2 }, now)
+  setPhase(state, 'PUZZLE_2_COMPLETE', now)
 }
 
 function submitPuzzle2(
@@ -706,11 +796,6 @@ function submitPuzzle2(
     }
     return { state, result: submitResult(state, false, reason, cooldown) }
   }
-  progress.solved = true
-  delete progress.lastFailure
-  delete progress.retryAt
-  state.systems.terminal = true
-  emit(state, { type: 'puzzle:verified', puzzle: 2 }, now)
-  setPhase(state, 'PUZZLE_2_COMPLETE', now)
+  solvePuzzle2(state, now)
   return { state, result: submitResult(state, true) }
 }

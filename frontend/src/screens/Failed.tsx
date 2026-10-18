@@ -1,4 +1,4 @@
-import { useGame } from "../game/useGame";
+import { useGame, useMe } from "../game/useGame";
 
 function RadioText({ text, delay, className = "", shakeAfter = false }: { text: string; delay: number; className?: string; shakeAfter?: boolean }) {
   const letters = Array.from(text);
@@ -24,10 +24,13 @@ function RadioText({ text, delay, className = "", shakeAfter = false }: { text: 
 }
 
 // Radio lines scroll in letter by letter before the final call shakes into place.
-// The server has no defeat state, so this screen is shown when the room is gone (closed,
-// idle timeout, or this seat was removed): an honest "signal lost", never a fake game over.
+// Two cases: the room's FAILED phase (the host ended the mission with the demo tools), with
+// a host replay; or the room is gone (closed, idle timeout, or this seat was removed), an
+// honest "signal lost".
 export function Failed() {
-  const { lastError, clearError } = useGame();
+  const { room, lastError, clearError, send, pending } = useGame();
+  const me = useMe();
+  const mission = room?.phase === "FAILED";
   const at = (s: number) => ({ animationDelay: `${s}s` });
   const followupAt = at(5.4);
 
@@ -49,14 +52,28 @@ export function Failed() {
         </div>
         <div className="flex flex-1 flex-col items-center justify-center gap-3">
           <div className="after-radio" style={followupAt}>
-            <h1 className="failure-title m-0 text-center font-display text-[84px] font-bold leading-[0.88] tracking-[4px] text-fault title-fault">SIGNAL<br />LOST</h1>
+            <h1 className="failure-title m-0 text-center font-display text-[84px] font-bold leading-[0.88] tracking-[4px] text-fault title-fault">
+              {mission ? <>MISSION<br />FAILED</> : <>SIGNAL<br />LOST</>}
+            </h1>
           </div>
-          <p className="after-radio m-0 text-center text-soft" style={followupAt}>{lastError?.message ?? "The room has closed."} Start or join a new room to keep playing.</p>
+          <p className="after-radio m-0 text-center text-soft" style={followupAt}>
+            {mission ? "Lockdown engaged. The facility is sealed." : `${lastError?.message ?? "The room has closed."} Start or join a new room to keep playing.`}
+          </p>
         </div>
         <div className="after-radio flex flex-col gap-2" style={followupAt}>
-          <button onClick={clearError} className="flex min-h-14 items-center gap-3 bg-panel px-4 text-left font-display text-[26px] font-bold bevel-raised">
-            <span aria-hidden className="text-fault">▶</span>Continue
-          </button>
+          {mission ? (
+            me?.isHost ? (
+              <button onClick={() => void send({ type: "game:reset" })} disabled={pending === "game:reset"} className="flex min-h-14 items-center gap-3 bg-panel px-4 text-left font-display text-[26px] font-bold bevel-raised">
+                <span aria-hidden className="text-fault">▶</span>Play again
+              </button>
+            ) : (
+              <p className="m-0 text-center text-emergency" role="status">Waiting for the host to restart…</p>
+            )
+          ) : (
+            <button onClick={clearError} className="flex min-h-14 items-center gap-3 bg-panel px-4 text-left font-display text-[26px] font-bold bevel-raised">
+              <span aria-hidden className="text-fault">▶</span>Continue
+            </button>
+          )}
         </div>
       </main>
     </div>

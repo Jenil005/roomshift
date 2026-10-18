@@ -42,6 +42,7 @@ export function AiScanner({
   notice: hostNotice,
   paused = false,
   onRestart,
+  labels,
   onSwitchToQr,
   onLiveChange,
   loadDetector,
@@ -53,6 +54,8 @@ export function AiScanner({
   /** Nothing is recorded while paused (e.g. the breaker cooldown); the camera stays on. */
   paused?: boolean;
   onRestart?: () => void;
+  /** Checklist names per object; defaults to the object names. */
+  labels?: Record<MarkerId, string>;
   onSwitchToQr: () => void;
   onLiveChange?: (live: boolean) => void;
   loadDetector?: () => Promise<ObjectDetector>;
@@ -294,6 +297,7 @@ export function AiScanner({
         idleText={idleText}
         justScanned={justScanned}
         onRestart={onRestart}
+        labels={labels}
       />
       <p className="guidance" role="status">
         {cameraLive

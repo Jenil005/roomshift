@@ -14,11 +14,16 @@ export type ClientEvent =
   | { type: "puzzle1:restart" } // clears the team's puzzle 1 scan progress (not a failed attempt)
   | { type: "player:heartbeat" } // every HEARTBEAT_INTERVAL_MS while the page is open
   | { type: "room:me" } // returns the caller's PrivateClue
-  | { type: "intro:skip" } // host only, INTRO -> PUZZLE_1 early
+  | { type: "intro:skip" } // host only, INTRO -> PUZZLE_1 (the role reveal's "Proceed")
   | { type: "puzzle2:draft"; order: string[] }
   | { type: "final:press"; held: boolean }
   | { type: "final:force" } // host only, after FINAL_FORCE_AFTER_MS in FINAL_SEQUENCE
-  | { type: "game:reset" }; // host only: back to LOBBY with the same players (demo replay)
+  | { type: "game:reset" } // host only: back to LOBBY with the same players (demo replay)
+  // Host-only demo tools, for presenting the game. Any mission phase.
+  | { type: "demo:skip" } // complete the current stage and move to the next
+  | { type: "demo:pause"; paused: boolean } // pause or resume the mission clock
+  | { type: "demo:win" } // straight to COMPLETE
+  | { type: "demo:fail" }; // straight to FAILED
 
 export type GameRequest = ClientEvent & { code?: string; playerToken?: string };
 

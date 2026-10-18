@@ -15,6 +15,7 @@ export const FALLBACK_NARRATION: Record<GamePhase, string> = {
   PUZZLE_2_COMPLETE: 'Comms online. The blast door controller is responding.',
   FINAL_SEQUENCE: 'Blast door override armed. Everyone hold together.',
   COMPLETE: 'Power restored. Lockdown disabled. Mission complete.',
+  FAILED: 'Lockdown engaged. The facility is sealed. Mission failed.',
 }
 
 /** Phases worth a Gemini call. Lobby ready-toggling would otherwise burn requests. */

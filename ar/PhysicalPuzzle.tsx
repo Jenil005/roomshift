@@ -1,6 +1,7 @@
 import { AiScanner } from "./AiScanner";
 import { ArrowUpRight } from "./components/ArrowUpRight";
 import type { ObjectDetector } from "./detect/ObjectDetector";
+import { coverTransform } from "./detect/geometry";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ScanProgress, useScanNotices } from "./ScanProgress";
 import {
@@ -19,6 +20,7 @@ import {
   type MarkerId,
   type ObjectScanReport,
   type PhysicalPuzzleResult,
+  type Point,
   type ScanNotice,
 } from "./types";
 import { useCameraScanner } from "./useCameraScanner";
@@ -38,6 +40,8 @@ export type HostScans = {
   notice?: ScanNotice | null;
   paused?: boolean;
   onRestart?: () => void;
+  /** Checklist names per object (the game shows clue words instead of object names). */
+  labels?: Record<MarkerId, string>;
 };
 
 /**
@@ -188,6 +192,7 @@ function QrScanner({
   notice: hostNotice,
   paused = false,
   onRestart,
+  labels,
   onLiveChange,
 }: HostScans & { onLiveChange: (live: boolean) => void }) {
   const [enabled, setEnabled] = useState(false);
@@ -243,6 +248,13 @@ function QrScanner({
     setEnabled(true);
   };
 
+  // The stage crops the video (object-fit: cover); map tag corners onto what is shown.
+  // Recomputed on every render (each frame): the video size can change after rotation.
+  const video = camera.videoRef.current;
+  const toView = video
+    ? coverTransform(video.videoWidth, video.videoHeight, video.clientWidth, video.clientHeight)
+    : (p: Point) => p;
+
   return (
     <>
       <div className={`camera-stage ${live ? "is-live" : ""}`}>
@@ -251,10 +263,10 @@ function QrScanner({
           <svg className="marker-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
             {markers.map((marker, index) => (
               <g key={`${marker.id}-${index}`} className={scanned.includes(marker.id) ? "scanned" : ""}>
-                <polygon points={marker.corners.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")} />
+                <polygon points={marker.corners.map(toView).map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")} />
                 <text
-                  x={marker.center.x * 1000}
-                  y={Math.max(36, Math.min(...marker.corners.map((p) => p.y)) * 1000 - 15)}
+                  x={toView(marker.center).x * 1000}
+                  y={Math.max(36, Math.min(...marker.corners.map((p) => toView(p).y)) * 1000 - 15)}
                   textAnchor="middle"
                 >
                   {MARKER_LABEL[marker.id]}
@@ -312,6 +324,7 @@ function QrScanner({
         idleText={complete ? "ALL OBJECTS SCANNED" : live ? (paused ? "BREAKER RESETTING" : "POINT AT ONE TAG") : "QR BACKUP"}
         justScanned={justScanned}
         onRestart={onRestart}
+        labels={labels}
       />
       <p className="guidance" role="status">
         {live ? "Scanned objects stay scanned. Low light? Turn on a lamp or move closer." : "Camera images are processed on your device."}

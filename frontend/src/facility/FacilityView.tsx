@@ -5,7 +5,8 @@ import { facilityStateFrom } from "./state";
 import { useArScan } from "./useArScan";
 import { FacilitySession, type FacilityStatus } from "../../../ar/facility/session";
 import type { FacilityQuality, Hotspot } from "../../../ar/facility/scene";
-import { MARKER_IDS, MARKER_LABEL } from "../../../ar/types";
+import { MARKER_IDS } from "../../../ar/types";
+import { CLUE_WORD_ORDER, OBJECT_CLUE_WORD } from "../game/content";
 import { usePuzzle1Scans } from "../game/usePuzzle1Scans";
 import { useGame } from "../game/useGame";
 import { useBootDraft } from "../ui/useBootDraft";
@@ -167,11 +168,11 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
           <section className="facility-card" aria-label="Object scan progress">
             <div className="text-label">Object scans (shared with your team)</div>
             <ul className="facility-scans">
-              {MARKER_IDS.map((id) => {
+              {CLUE_WORD_ORDER.map((id) => {
                 const done = p1.scanned.includes(id);
                 return (
-                  <li key={id} className={`${done ? "on" : ""} ${scan.justScanned === id ? "just-scanned" : ""}`} aria-label={`${MARKER_LABEL[id]}: ${done ? "scanned" : "not scanned"}`}>
-                    {done ? "✓" : "○"} {MARKER_LABEL[id]} {done ? "SCANNED" : "NOT SCANNED"}
+                  <li key={id} className={`${done ? "on" : ""} ${scan.justScanned === id ? "just-scanned" : ""}`} aria-label={`${OBJECT_CLUE_WORD[id]}: ${done ? "scanned" : "not scanned"}`}>
+                    {done ? "✓" : "○"} {OBJECT_CLUE_WORD[id]} {done ? "SCANNED" : "NOT SCANNED"}
                   </li>
                 );
               })}

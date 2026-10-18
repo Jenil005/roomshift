@@ -4,9 +4,9 @@ import {
   FINAL_FORCE_AFTER_MS,
   FINAL_SYNC_WINDOW_MS,
   HOST_HANDOFF_AFTER_MS,
-  INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
+  MISSION_DURATION_MS,
   PHASE_COMPLETE_HOLD_MS,
   PUZZLE1_COOLDOWN_MS,
   PUZZLE1_SCAN_MIN_CONFIDENCE,
@@ -173,15 +173,12 @@ describe('private clues', () => {
 })
 
 describe('timers', () => {
-  it('INTRO auto-advances to PUZZLE_1, and the host can skip it', () => {
+  it('INTRO waits for the host to proceed', () => {
     const g = startedGame()
-    expect(nextDeadline(g.state)).toBe(T0 + INTRO_DURATION_MS)
-    g.advance(INTRO_DURATION_MS - 1)
+    expect(nextDeadline(g.state)).toBe(T0 + DISCONNECT_AFTER_MS + 1) // presence only, no intro timer
+    g.advance(60_000)
     g.run({ type: 'tick' })
     expect(g.state!.phase).toBe('INTRO')
-    g.advance(1)
-    g.run({ type: 'tick' })
-    expect(g.state!.phase).toBe('PUZZLE_1')
 
     const s = startedGame()
     expect(s.run({ type: 'intro:skip', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'not_host' })
@@ -533,10 +530,11 @@ describe('room:view', () => {
     expect(JSON.stringify(out.result)).not.toContain('h0')
   })
 
-  it('still applies timers, so a poll can observe the intro ending', () => {
-    const g = startedGame()
-    g.advance(INTRO_DURATION_MS)
-    expect(g.run({ type: 'room:view' }).result).toMatchObject({ ok: true, data: { room: { phase: 'PUZZLE_1' } } })
+  it('still applies timers, so a poll can observe a timed phase ending', () => {
+    const g = atPuzzle1()
+    scanAll(g)
+    g.advance(PHASE_COMPLETE_HOLD_MS)
+    expect(g.run({ type: 'room:view' }).result).toMatchObject({ ok: true, data: { room: { phase: 'PUZZLE_2' } } })
   })
 })
 
@@ -706,5 +704,67 @@ describe('reset and full digital playthrough', () => {
       const res = submit2(g, g.state!.puzzle2!.solution).result as { data: SubmitData }
       expect(res.data.solved).toBe(true)
     }
+  })
+})
+
+describe('demo tools', () => {
+  const demo = (g: ReturnType<typeof game>, type: 'demo:skip' | 'demo:win' | 'demo:fail', tokenHash = 'h0') =>
+    g.run({ type, tokenHash })
+  const pause = (g: ReturnType<typeof game>, paused: boolean) => g.run({ type: 'demo:pause', tokenHash: 'h0', paused })
+
+  it('are host only, and only during a mission', () => {
+    const g = startedGame()
+    for (const type of ['demo:skip', 'demo:win', 'demo:fail'] as const) {
+      expect(demo(g, type, 'h1').result).toMatchObject({ ok: false, code: 'not_host' })
+    }
+    expect(g.state!.phase).toBe('INTRO')
+    const lobby = lobbyOfTwo()
+    expect(demo(lobby, 'demo:skip').result).toMatchObject({ ok: false, code: 'wrong_phase' })
+  })
+
+  it('skip walks every stage through to COMPLETE', () => {
+    const g = startedGame()
+    const phases: string[] = []
+    while (g.state!.phase !== 'COMPLETE') {
+      expect(demo(g, 'demo:skip').result.ok).toBe(true)
+      phases.push(g.state!.phase)
+    }
+    expect(phases).toEqual(['PUZZLE_1', 'PUZZLE_1_COMPLETE', 'PUZZLE_2', 'PUZZLE_2_COMPLETE', 'FINAL_SEQUENCE', 'COMPLETE'])
+    expect(g.state!.systems).toEqual({ breaker: true, terminal: true, door: true })
+    expect(g.state!.puzzles[1]).toMatchObject({ solved: true })
+    expect(g.state!.puzzles[1].verifiedBy).toBeUndefined() // skipped, not verified
+  })
+
+  it('the mission clock starts with puzzle 1 and pauses for everyone', () => {
+    const g = startedGame()
+    expect(pause(g, true).result).toMatchObject({ ok: false, code: 'wrong_phase' }) // no clock in INTRO
+    g.advance(5_000)
+    g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    const start = T0 + 5_000
+    expect(toView(g.state!).mission).toEqual({ startedAt: start, durationMs: MISSION_DURATION_MS, pausedMs: 0 })
+    g.advance(10_000)
+    pause(g, true)
+    expect(g.state!.mission!.pausedAt).toBe(start + 10_000)
+    g.advance(30_000)
+    pause(g, true) // already paused: no change
+    pause(g, false)
+    expect(g.state!.mission).toEqual({ startedAt: start, durationMs: MISSION_DURATION_MS, pausedMs: 30_000 })
+  })
+
+  it('win and fail end the mission and freeze the clock; reset clears it', () => {
+    const w = atPuzzle1()
+    expect(demo(w, 'demo:win').result.ok).toBe(true)
+    expect(w.state!.phase).toBe('COMPLETE')
+    expect(w.state!.systems.door).toBe(true)
+    expect(w.state!.mission!.pausedAt).toBeDefined()
+
+    const f = atPuzzle1()
+    expect(demo(f, 'demo:fail').result.ok).toBe(true)
+    expect(f.state!.phase).toBe('FAILED')
+    expect(f.state!.mission!.pausedAt).toBeDefined()
+    expect(demo(f, 'demo:skip').result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    f.run({ type: 'game:reset', tokenHash: 'h0' })
+    expect(f.state!.phase).toBe('LOBBY')
+    expect(toView(f.state!).mission).toBeUndefined()
   })
 })

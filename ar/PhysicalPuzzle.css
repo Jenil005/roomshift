@@ -128,8 +128,16 @@
     linear-gradient(90deg, #273b2829 1px, transparent 1px);
   background-size: 40px 40px;
 }
+/* Live feed: a fixed square frame, the video cropped to fill it (overlays use coverTransform). */
 .scanner-panel .camera-stage.is-live {
   min-height: 0;
+  aspect-ratio: 1 / 1;
+}
+.scanner-panel .camera-stage.is-live video {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: cover;
 }
 .scanner-panel .camera-stage video {
   display: block;

@@ -3,7 +3,7 @@ import type { SubmitData } from "@shared/events";
 import { PhysicalPuzzle, type ScanMode } from "../../../ar/PhysicalPuzzle";
 import { loadPreferredDetector, releaseDetectors } from "../../../ar/detect/selectDetector";
 import type { PhysicalPuzzleResult } from "../../../ar/types";
-import { powerPercent } from "../game/content";
+import { OBJECT_CLUE_WORD, powerPercent } from "../game/content";
 import { toPuzzle1Submission } from "../game/evidence";
 import { usePuzzle1Scans } from "../game/usePuzzle1Scans";
 import { useGame } from "../game/useGame";
@@ -74,7 +74,7 @@ export function Puzzle1() {
         initialMode={mode}
         onModeChange={onModeChange}
         onResult={onResult}
-        scans={host}
+        scans={{ ...host, labels: OBJECT_CLUE_WORD }}
         loadDetector={loadDetector}
         serverJudged
       />

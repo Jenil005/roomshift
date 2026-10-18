@@ -3,6 +3,13 @@ import type { ModuleId } from "@shared/puzzles/commsBoot";
 import type { ObjectId, RoleId, Room, SystemsState } from "@shared/types";
 
 export const OBJECT_LABEL: Record<ObjectId, string> = { book: "Book", cup: "Cup", keyboard: "Keyboard" };
+// The word each puzzle 1 clue uses for an object (backend/src/game/puzzle1.ts CLUES). The scan
+// checklist shows these instead of object names, so the UI does not name the objects to find.
+export const OBJECT_CLUE_WORD: Record<ObjectId, string> = { book: "KNOWLEDGE", cup: "CONTAINMENT", keyboard: "ACCESS" };
+// Checklist order: alphabetical by clue word, so the list order is not the scan sequence.
+export const CLUE_WORD_ORDER = (Object.keys(OBJECT_CLUE_WORD) as ObjectId[]).sort((a, b) =>
+  OBJECT_CLUE_WORD[a].localeCompare(OBJECT_CLUE_WORD[b]),
+);
 
 export const ROLE_TITLE: Record<RoleId, string> = {
   engineer: "Field Engineer",

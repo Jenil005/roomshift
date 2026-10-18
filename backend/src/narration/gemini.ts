@@ -24,6 +24,7 @@ const MOMENT: Record<GamePhase, string> = {
   PUZZLE_2_COMPLETE: 'The comms stack has just come online.',
   FINAL_SEQUENCE: 'Only the blast door remains; every operative must hold the override at the same moment.',
   COMPLETE: 'The team has escaped: power restored, lockdown lifted.',
+  FAILED: 'The team ran out of time: the facility has sealed with them inside.',
 }
 
 const SYSTEM_INSTRUCTION = [

@@ -60,7 +60,12 @@ export function useScanNotices(
   return { notice: hostNotice ?? local?.notice ?? null, hint, justScanned };
 }
 
-/** Three object indicators, k/3 progress, the status line and an optional restart. */
+/**
+ * Three object indicators, k/3 progress, the status line and an optional restart.
+ * `labels` replaces the object names on the indicators (the game shows clue words); the
+ * indicators are then listed alphabetically by label, so their order does not give away
+ * the scan sequence.
+ */
 export function ScanProgress({
   scanned,
   pending = [],
@@ -69,6 +74,7 @@ export function ScanProgress({
   justScanned,
   onRestart,
   restartDisabled,
+  labels,
 }: {
   scanned: readonly MarkerId[];
   pending?: readonly MarkerId[];
@@ -77,8 +83,11 @@ export function ScanProgress({
   justScanned?: MarkerId | null;
   onRestart?: () => void;
   restartDisabled?: boolean;
+  labels?: Record<MarkerId, string>;
 }) {
   const count = scanned.length;
+  const label = labels ?? MARKER_LABEL;
+  const ids = labels ? [...MARKER_IDS].sort((a, b) => label[a].localeCompare(label[b])) : MARKER_IDS;
   return (
     <div className="scan-feedback scan-progress">
       <p
@@ -88,19 +97,19 @@ export function ScanProgress({
         {notice?.text ?? idleText}
       </p>
       <ol className="marker-list scan-list" aria-label="Scanned objects">
-        {MARKER_IDS.map((id) => {
+        {ids.map((id) => {
           const done = scanned.includes(id);
           const saving = done && pending.includes(id);
           return (
             <li
               key={id}
               className={`marker-chip scan-chip ${done ? "is-scanned" : "is-waiting"} ${justScanned === id ? "just-scanned" : ""}`}
-              aria-label={`${MARKER_LABEL[id]}: ${done ? "scanned" : "not scanned"}`}
+              aria-label={`${label[id]}: ${done ? "scanned" : "not scanned"}`}
             >
               <span className="scan-check" aria-hidden="true">
                 {done ? "✓" : "○"}
               </span>
-              {MARKER_LABEL[id]}
+              {label[id]}
               <em>{done ? (saving ? "SCANNED · SAVING" : "SCANNED") : "NOT SCANNED"}</em>
             </li>
           );

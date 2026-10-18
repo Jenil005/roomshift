@@ -10,6 +10,7 @@ import { FinalOverride } from "./screens/FinalOverride";
 import { Complete } from "./screens/Complete";
 import { Failed } from "./screens/Failed";
 import { DevPanel } from "./dev/DevPanel";
+import { DemoTools } from "./dev/DemoTools";
 import { DebugOverlay } from "./dev/DebugOverlay";
 import { FacilityLauncher } from "./facility/launcher";
 import type { ConnectionStatus } from "./game/GameClient";
@@ -39,6 +40,8 @@ function Router() {
       return <FinalOverride />;
     case "COMPLETE":
       return <Complete />;
+    case "FAILED":
+      return <Failed />;
   }
 }
 
@@ -69,6 +72,7 @@ export default function App() {
       )}
       <div className="scanlines" aria-hidden />
       <DevPanel />
+      <DemoTools />
       <DebugOverlay />
     </FacilityLauncher.Provider>
   );

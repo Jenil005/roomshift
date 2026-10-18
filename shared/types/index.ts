@@ -13,7 +13,8 @@ export type GamePhase =
   | "PUZZLE_2"
   | "PUZZLE_2_COMPLETE"
   | "FINAL_SEQUENCE"
-  | "COMPLETE";
+  | "COMPLETE"
+  | "FAILED"; // only reached through the host's demo:fail; the host resets from here
 
 export interface Player {
   id: string;
@@ -90,6 +91,17 @@ export interface Room {
   puzzle1?: Puzzle1PublicState; // present from PUZZLE_1 on
   puzzle2?: Puzzle2PublicState; // present from PUZZLE_2 on
   final?: FinalPublicState; // present during FINAL_SEQUENCE
+  mission?: MissionClock; // present from PUZZLE_1 on
+}
+
+// The mission countdown, kept by the server so a pause is the same on every phone.
+// Time left = durationMs - ((pausedAt ?? now) - startedAt - pausedMs). Display only: the
+// server never fails the mission when it reaches zero. It freezes on COMPLETE and FAILED.
+export interface MissionClock {
+  startedAt: number; // server epoch ms
+  durationMs: number;
+  pausedMs: number; // total time spent paused before the current pause
+  pausedAt?: number; // set while paused (or frozen at the end)
 }
 
 export interface Puzzle2PublicState {

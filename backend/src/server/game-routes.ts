@@ -84,6 +84,10 @@ const requestSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('final:press'), held: z.boolean(), ...authed }),
   z.object({ type: z.literal('final:force'), ...authed }),
   z.object({ type: z.literal('game:reset'), ...authed }),
+  z.object({ type: z.literal('demo:skip'), ...authed }),
+  z.object({ type: z.literal('demo:pause'), paused: z.boolean(), ...authed }),
+  z.object({ type: z.literal('demo:win'), ...authed }),
+  z.object({ type: z.literal('demo:fail'), ...authed }),
 ])
 
 const fail = (code: GameErrorCode, message: string): GameResult => ({ ok: false, code, message })
@@ -203,6 +207,8 @@ function toCommand(req: AuthedRequest, tokenHash: string): EngineCommand {
       return { type: req.type, tokenHash, order: req.order }
     case 'final:press':
       return { type: req.type, tokenHash, held: req.held }
+    case 'demo:pause':
+      return { type: req.type, tokenHash, paused: req.paused }
     default:
       return { type: req.type, tokenHash }
   }
