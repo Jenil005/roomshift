@@ -13,8 +13,9 @@ export function Transition({ which }: { which: 1 | 2 }) {
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center">
         <span className="font-display text-[44px] font-bold leading-none text-phosphor">{which === 1 ? "Breaker" : "Comms"}<br />online</span>
         <p className="m-0 text-soft">{narrationFor(room, which === 1 ? NARRATION.puzzle1Complete : NARRATION.puzzle2Complete)}</p>
+        {which === 1 && <p className="m-0 font-display text-phosphor" role="status">BREAKER RESTORED — PUZZLE COMPLETE</p>}
         {which === 1 && verifiedBy && (
-          <p className="m-0 text-label">{verifiedBy === "camera" ? "Verified from camera evidence" : "Verified from a manual report"}</p>
+          <p className="m-0 text-label">{verifiedBy === "camera" ? "Verified from scanned objects (BOOK → CUP → KEYBOARD)" : "Verified from a manual report"}</p>
         )}
       </div>
       <PowerBar value={powerPercent(room.systems)} />

@@ -85,7 +85,7 @@ check(await exists(dist("models/mediapipe/NOTICE.md")), "MediaPipe model NOTICE 
 check(await exists(dist("diagnostics.html")), "diagnostics page missing");
 
 // 8. Printed QR markers for the objects.
-for (const id of ["book", "cup", "keys"]) check(await exists(dist(`markers/${id}.svg`)), `marker missing ${id}.svg`);
+for (const id of ["book", "cup", "keyboard"]) check(await exists(dist(`markers/${id}.svg`)), `marker missing ${id}.svg`);
 
 if (problems.length) {
   console.error(`dist verification FAILED (${problems.length} of ${checked} checks):\n- ${problems.join("\n- ")}`);

@@ -8,6 +8,7 @@ export function facilityStateFrom(room: Room): FacilityState {
     ...room.systems,
     phase: room.phase,
     draft: room.puzzle2?.draft ?? [],
+    scanned: room.puzzle1?.scanned.map((s) => s.object) ?? [],
     modules: MODULES.map((id) => ({ id, label: MODULE_LABEL[id] })),
     holding: room.final?.holding.length ?? 0,
     players: room.players.filter((p) => p.connected).length,

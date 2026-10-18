@@ -8,15 +8,17 @@ test.use({ launchOptions: { args: ["--enable-unsafe-swiftshader", "--use-angle=s
 const fixture = (name: string) => fileURLToPath(new URL(`../../ar/tests/fixtures/${name}`, import.meta.url));
 
 /**
- * Fake rear camera (same as ar/tests/browser/ai.spec.ts): crops of two real CC0 photos, a book
- * on the left and a mug in the middle, and the printed KEYBOARD QR tag on the right. The real
- * self-hosted COCO-SSD model and QR decoder run on these frames.
+ * Fake rear camera (as in ar/tests/browser/ai.spec.ts) showing one thing at a time, set by
+ * `window.view`: a crop of a real CC0 book photo, a real CC0 mug photo, or the printed
+ * KEYBOARD QR tag (there is no keyboard photo fixture yet). The real self-hosted COCO-SSD
+ * model and QR decoder run on these frames.
  */
 async function fakeCamera(context: BrowserContext) {
   await context.route("**/__fixtures/*.jpg", (route) => route.fulfill({ path: fixture(route.request().url().split("/").pop()!) }));
   await context.addInitScript(() => {
-    const w = window as typeof window & { cameraTracks: MediaStreamTrack[] };
+    const w = window as typeof window & { cameraTracks: MediaStreamTrack[]; view: string };
     w.cameraTracks = [];
+    w.view = "none";
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         const canvas = document.createElement("canvas");
@@ -33,11 +35,13 @@ async function fakeCamera(context: BrowserContext) {
         const draw = () => {
           ctx.fillStyle = "#6f5a46";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(book, 330, 160, 300, 420, 67, 40, 286, 400);
-          ctx.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
-          ctx.fillStyle = "#ffffff";
-          ctx.fillRect(890, 110, 260, 260);
-          ctx.drawImage(keyboard, 900, 120, 240, 240);
+          if (w.view === "book") ctx.drawImage(book, 330, 160, 300, 420, 67, 40, 286, 400);
+          if (w.view === "mug") ctx.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
+          if (w.view === "keyboard-tag") {
+            ctx.fillStyle = "#ffffff";
+            ctx.fillRect(510, 110, 260, 260);
+            ctx.drawImage(keyboard, 520, 120, 240, 240);
+          }
         };
         draw();
         const stream = canvas.captureStream(10);
@@ -66,7 +70,7 @@ function solve(lines: string[]): ModuleId[] {
 
 const paperLines = async (p: Page) => (await p.locator(".bevel-paper p").allInnerTexts()).map((t) => t.trim()).filter(Boolean);
 
-test("two browsers play a full live mission: private clues, rejoin, camera evidence, shared terminal, joint hold", async ({ browser }) => {
+test("two browsers play a full live mission: private clues, rejoin, sequential object scans, shared terminal, joint hold", async ({ browser }) => {
   const ctxA = await browser.newContext();
   const ctxB = await browser.newContext();
   await fakeCamera(ctxA);
@@ -121,14 +125,33 @@ test("two browsers play a full live mission: private clues, rejoin, camera evide
   await slots.nth(0).selectOption("cup");
   await slots.nth(1).selectOption("book");
   await slots.nth(2).selectOption("keyboard");
-  await b.getByRole("button", { name: /Check arrangement/ }).click();
+  await b.getByRole("button", { name: /Report sequence/ }).click();
   await expect(b.getByRole("alert").filter({ hasText: "Wrong order" })).toBeVisible();
 
-  // A scans the real arrangement: COCO-SSD sees book + cup, the QR tag gives keyboard.
+  // A scans one object at a time. COCO-SSD recognizes the real book, then the real mug.
+  const view = (v: string) => a.evaluate((x) => ((window as unknown as { view: string }).view = x), v);
+  const scannedA = a.getByLabel("Scanned objects");
   await expect(a.getByRole("button", { name: /Start AI camera/ })).toBeVisible({ timeout: 60_000 });
   await a.getByRole("button", { name: /Start AI camera/ }).click();
-  await expect(a.getByText("Verified from camera evidence")).toBeVisible({ timeout: 60_000 });
-  await expect(b.getByText("Verified from camera evidence")).toBeVisible();
+  await view("book");
+  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(scannedA.getByLabel("BOOK: scanned")).not.toContainText("SAVING", { timeout: 15_000 }); // server accepted
+  await view("mug");
+  await expect(scannedA.getByLabel("CUP: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible(); // still scanned, out of view
+  // B's phone shows the shared progress from the server (in the facility HUD).
+  await b.getByRole("button", { name: /FACILITY/ }).click();
+  await expect(b.getByText("✓ CUP SCANNED")).toBeVisible({ timeout: 15_000 });
+  await expect(b.getByText("○ KEYBOARD NOT SCANNED")).toBeVisible();
+  await b.getByRole("button", { name: "BACK TO MISSION" }).click();
+  // No keyboard photo fixture yet: A finishes with the KEYBOARD tag in QR backup.
+  await a.getByRole("button", { name: "QR backup" }).click();
+  await expect(scannedA.getByLabel("CUP: scanned")).toBeVisible(); // progress survives the mode switch
+  await view("keyboard-tag");
+  await a.getByRole("button", { name: /Enable camera/ }).click();
+  await expect(a.getByText("BREAKER RESTORED — PUZZLE COMPLETE")).toBeVisible({ timeout: 60_000 });
+  await expect(a.getByText(/Verified from scanned objects/)).toBeVisible({ timeout: 15_000 });
+  await expect(b.getByText(/Verified from scanned objects/)).toBeVisible();
   // The scanner released the camera once the evidence was accepted.
   await expect.poll(() => a.evaluate(() => (window as unknown as { cameraTracks: MediaStreamTrack[] }).cameraTracks.every((t) => t.readyState === "ended"))).toBe(true);
 

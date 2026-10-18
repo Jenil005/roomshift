@@ -79,7 +79,7 @@ test("facility: preview is labeled NOT AR, AR places it, scanner hand-off releas
 
   // Scanner hand-off: XR8 stops and its camera track is released BEFORE the scanner mounts.
   await a.getByRole("button", { name: /SCAN OBJECTS/ }).click();
-  await expect(a.getByText("Breaker: physical order")).toBeVisible();
+  await expect(a.getByText("Breaker: scan sequence")).toBeVisible();
   const afterScan = await mock(a);
   expect(afterScan.stops).toBeGreaterThanOrEqual(1);
   expect(afterScan.tracksStopped).toBeGreaterThanOrEqual(1);
@@ -92,8 +92,8 @@ test("facility: preview is labeled NOT AR, AR places it, scanner hand-off releas
   const slots = b.locator(".manual-slots select");
   await slots.nth(0).selectOption("book");
   await slots.nth(1).selectOption("cup");
-  await slots.nth(2).selectOption("keys");
-  await b.getByRole("button", { name: /Check arrangement/ }).click();
+  await slots.nth(2).selectOption("keyboard");
+  await b.getByRole("button", { name: /Report sequence/ }).click();
   await expect(a.getByText("BREAKER ONLINE")).toBeVisible(); // server state reached A's AR view
   expect((await snapshot(a)).placed).toBe(true); // a state change never moves the placed room
 
