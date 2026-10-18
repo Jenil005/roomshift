@@ -24,7 +24,7 @@ const loadDetector = () => loadPreferredDetector();
 // The chosen mode survives switching to the facility and back (this screen remounts).
 let rememberedMode: ScanMode = "ai";
 
-export function Puzzle1({ preview = false }: { preview?: boolean } = {}) {
+export function Puzzle1() {
   const { room, clue, send, lastSubmit } = useGame();
   const { host } = usePuzzle1Scans();
   const [mode, setMode] = useState<ScanMode>(rememberedMode);
@@ -69,23 +69,15 @@ export function Puzzle1({ preview = false }: { preview?: boolean } = {}) {
         </p>
       )}
       <ServerError actions={["puzzle:submit", "puzzle1:restart"]} />
-      {preview ? (
-        <div className="flex min-h-[38dvh] flex-col items-center justify-center gap-3 border-2 border-rule bg-inset p-4 text-center bevel-sunken">
-          <span className="font-display text-[22px] text-label">SCANNER PREVIEW</span>
-          <span className="text-soft">Camera scanning is disabled in the dev screen preview.</span>
-          <button type="button" className="min-h-12 border-2 border-panel px-4 font-display text-label">REPORT SEQUENCE</button>
-        </div>
-      ) : (
-        <PhysicalPuzzle
-          key={armed}
-          initialMode={mode}
-          onModeChange={onModeChange}
-          onResult={onResult}
-          scans={host}
-          loadDetector={loadDetector}
-          serverJudged
-        />
-      )}
+      <PhysicalPuzzle
+        key={armed}
+        initialMode={mode}
+        onModeChange={onModeChange}
+        onResult={onResult}
+        scans={host}
+        loadDetector={loadDetector}
+        serverJudged
+      />
 
       <PowerBar value={powerPercent(room.systems)} />
     </Screen>

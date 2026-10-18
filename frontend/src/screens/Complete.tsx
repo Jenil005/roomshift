@@ -12,8 +12,8 @@ export function Complete() {
 
   return (
     // The only light screen in the game: every phone flips at once.
-    <div className="h-dvh overflow-hidden bg-manual text-bunker">
-      <main className="screen-shell mx-auto flex h-dvh max-w-md flex-col gap-4 overflow-hidden px-5 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-14">
+    <div className="min-h-dvh bg-manual text-bunker">
+      <main className="screen-shell mx-auto flex min-h-dvh max-w-md flex-col gap-4 px-5 pb-7 pt-14">
         <h1 className="result-title m-0 text-center font-display text-[56px] font-bold leading-[0.95]">POWER<br />RESTORED</h1>
         <dl className="m-0 flex flex-col gap-1 bg-white p-4 bevel-paper">
           <div className="flex justify-between"><dt>Breaker</dt><dd className="m-0 font-display">{room.systems.breaker ? "Online" : "Offline"}</dd></div>

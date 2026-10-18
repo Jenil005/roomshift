@@ -3,7 +3,7 @@ import type { ButtonHTMLAttributes, ReactNode } from "react";
 export function Screen({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
     <main
-      className={`screen-shell mx-auto flex h-dvh w-full max-w-md flex-col gap-3 overflow-hidden px-4 pb-[max(0.6rem,env(safe-area-inset-bottom))] ${className}`}
+      className={`screen-shell mx-auto flex min-h-dvh w-full max-w-md flex-col gap-3 px-4 pb-[max(1rem,env(safe-area-inset-bottom))] ${className}`}
     >
       {children}
     </main>

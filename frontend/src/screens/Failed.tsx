@@ -32,8 +32,8 @@ export function Failed() {
   const followupAt = at(5.4);
 
   return (
-    <div className="h-dvh overflow-hidden bg-void">
-      <main className="screen-shell mx-auto flex h-dvh max-w-md flex-col gap-4 overflow-hidden px-5 pb-[max(0.6rem,env(safe-area-inset-bottom))] pt-10">
+    <div className="min-h-dvh bg-void">
+      <main className="screen-shell mx-auto flex min-h-dvh max-w-md flex-col gap-4 px-5 pb-7 pt-10">
         <div className="flex items-center gap-2">
           <span className="font-display text-[18px] font-bold text-fault">SIGNAL</span>
           <div className="h-[14px] flex-1 bg-void bevel-sunken !border-2" />

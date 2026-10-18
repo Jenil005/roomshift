@@ -12,7 +12,6 @@ import { Failed } from "./screens/Failed";
 import { DevPanel } from "./dev/DevPanel";
 import { DebugOverlay } from "./dev/DebugOverlay";
 import { FacilityLauncher } from "./facility/launcher";
-import { DevScreenPreview, type DevScreen } from "./dev/DevScreenPreview";
 import type { ConnectionStatus } from "./game/GameClient";
 
 // Three.js and the facility load only when a player opens it.
@@ -46,34 +45,8 @@ function Router() {
 export default function App() {
   const { room } = useGame();
   const [facilityOpen, setFacilityOpen] = useState(false);
-  const [devScreen, setDevScreen] = useState<DevScreen | null>(null);
-  const [landscape, setLandscape] = useState(() => window.matchMedia("(orientation: landscape)").matches);
   const inMission = !!room && room.phase !== "LOBBY" && room.phase !== "READY";
   const showFacility = facilityOpen && inMission;
-
-  useEffect(() => {
-    const query = window.matchMedia("(orientation: landscape)");
-    const update = () => setLandscape(query.matches);
-    const requestPortrait = () => {
-      if (window.matchMedia("(min-width: 700px) and (pointer: fine)").matches) return;
-      try {
-        const orientation = window.screen.orientation;
-        if (orientation?.lock) void orientation.lock("portrait-primary").catch(() => {});
-      } catch {
-        // Some browsers expose the API but reject orientation locking outside fullscreen.
-      }
-    };
-    update();
-    requestPortrait();
-    query.addEventListener("change", update);
-    document.addEventListener("pointerup", requestPortrait);
-    document.addEventListener("keydown", requestPortrait);
-    return () => {
-      query.removeEventListener("change", update);
-      document.removeEventListener("pointerup", requestPortrait);
-      document.removeEventListener("keydown", requestPortrait);
-    };
-  }, []);
 
   // Each phase is a new screen: start it at the top, not at the previous screen's scroll.
   const screenKey = `${room?.phase ?? "home"}:${showFacility}`;
@@ -84,13 +57,10 @@ export default function App() {
   const openFacility = inMission ? () => setFacilityOpen(true) : null;
 
   return (
-    <div className={landscape ? "app-portrait-fallback" : "app-portrait-normal"}>
     <FacilityLauncher.Provider value={openFacility}>
       <PwaStatus />
       {/* The facility and the mission screens never mount together: one camera owner at a time. */}
-      {devScreen ? (
-        <DevScreenPreview screen={devScreen} />
-      ) : showFacility ? (
+      {showFacility ? (
         <Suspense fallback={<p className="facility-loading" role="status">Loading the facility…</p>}>
           <FacilityView onClose={() => setFacilityOpen(false)} onScan={() => setFacilityOpen(false)} />
         </Suspense>
@@ -98,10 +68,9 @@ export default function App() {
         <Router />
       )}
       <div className="scanlines" aria-hidden />
-      <DevPanel onPreview={setDevScreen} />
+      <DevPanel />
       <DebugOverlay />
     </FacilityLauncher.Provider>
-    </div>
   );
 }
 

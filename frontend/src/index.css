@@ -69,11 +69,10 @@
   background-size: 4px 4px;
 }
 
-html, body, #root { width: 100%; height: 100%; min-height: 100%; overflow: hidden; }
+html, body, #root { min-height: 100%; }
 body {
   margin: 0;
-  height: 100dvh;
-  min-height: 0;
+  min-height: 100dvh;
   background: var(--color-bunker);
   color: var(--color-manual);
   font-family: var(--font-body);
@@ -83,21 +82,10 @@ body {
   line-height: 1.1;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
-  overflow: hidden;
+  overflow-x: clip;
 }
-.screen-shell {
-  width: 100%;
-  height: 100dvh;
-  max-height: 100dvh;
-  min-height: 0;
-  min-width: 0;
-  box-sizing: border-box;
-  overflow: hidden;
-  padding-top: max(2.8rem, calc(env(safe-area-inset-top) + 40px));
-  padding-bottom: max(.6rem, env(safe-area-inset-bottom));
-  gap: clamp(5px, 1.3dvh, 11px);
-}
-.screen-shell > * { min-width: 0; min-height: 0; max-width: 100%; }
+.screen-shell { min-width: 0; padding-top: max(3.25rem, calc(env(safe-area-inset-top) + 42px)); }
+.screen-shell > * { min-width: 0; max-width: 100%; }
 .home-title { font-size: clamp(2.75rem, 15vw, 4rem); line-height: .96; overflow-wrap: anywhere; }
 .role-title { font-size: clamp(2.25rem, 12vw, 3.25rem); overflow-wrap: anywhere; }
 button { cursor: pointer; touch-action: manipulation; }
@@ -205,14 +193,7 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 }
 .ar-screen { gap: clamp(3px, .65dvh, 6px); }
 .ar-screen .mission-heading { font-size: clamp(18px, 2.8dvh, 23px); }
-.ar-screen .ar-clue {
-  padding: clamp(5px, 1dvh, 9px);
-  font-size: clamp(14px, 2.2dvh, 17px);
-  line-height: 1.05;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
+.ar-screen .ar-clue { padding: clamp(5px, 1dvh, 9px); font-size: clamp(14px, 2.2dvh, 17px); line-height: 1.05; }
 .ar-screen .ar-instruction { font-size: clamp(13px, 2dvh, 16px); line-height: 1.04; }
 .ar-screen > .flex-1 { flex: 0 0 0%; }
 .ar-screen > button { min-height: clamp(38px, 6dvh, 48px); padding-block: 3px; font-size: clamp(14px, 2.3dvh, 17px); }
@@ -306,156 +287,3 @@ button:disabled { cursor: not-allowed; opacity: 0.5; }
 /* The AR module's scanner, restyled to the Blackout Protocol identity. */
 .scanner-panel { --lime: var(--color-phosphor); --muted: var(--color-label); --line: var(--color-panel); font-family: var(--font-body); background: var(--color-inset); border-radius: 0; border: 3px solid; border-color: var(--color-void) var(--color-bevel) var(--color-bevel) var(--color-void); }
 .scanner-panel .button.primary { border-radius: 0; font-family: var(--font-display); }
-
-/* Every game view is a fixed viewport layout. Tighten spacing and type on short phones so
-   controls remain visible without document scrolling, including in landscape. */
-body { font-size: clamp(16px, min(2.8dvh, 5.6vw), 22px); }
-.screen-shell > .flex-1 { min-height: 0; }
-.screen-shell p { font-size: clamp(13px, 2.4dvh, 22px); }
-.screen-shell section, .screen-shell ul, .screen-shell ol { min-height: 0; }
-.player-entry { padding-block: clamp(4px, 1dvh, 12px); }
-.ar-screen { padding-top: max(2.8rem, calc(env(safe-area-inset-top) + 40px)); }
-.ar-screen .camera-view { min-height: 0; }
-.ar-screen .scanner-panel { max-height: 100%; }
-.screen-shell .hold-action { flex: 0 1 auto; height: clamp(72px, 18dvh, 160px); min-height: 0; }
-.facility-hud { overflow: hidden; }
-
-@media (max-height: 700px) {
-  .screen-shell { padding-top: max(2.55rem, calc(env(safe-area-inset-top) + 36px)); gap: clamp(3px, .9dvh, 7px); }
-  .screen-shell button { min-height: clamp(40px, 7.5dvh, 52px); padding-block: 3px; font-size: clamp(14px, 3.4dvh, 20px); }
-  .screen-shell input { height: auto; min-height: clamp(42px, 8dvh, 52px); font-size: 16px; }
-  .screen-shell [aria-label="Shared boot order"] li { height: clamp(38px, 7dvh, 52px); }
-  .screen-shell [aria-label="Shared boot order"] button { min-height: clamp(40px, 8dvh, 54px); font-size: clamp(15px, 3dvh, 19px); }
-  .screen-shell .home-title { font-size: clamp(2rem, 11dvh, 3.5rem); line-height: .95; }
-  .screen-shell .role-title { font-size: clamp(1.8rem, 8dvh, 3.1rem); }
-  .screen-shell .mission-heading { font-size: clamp(18px, 4dvh, 25px); }
-  .screen-shell .result-title { font-size: clamp(2rem, 10dvh, 3.5rem); }
-  .screen-shell .failure-title { font-size: clamp(2.7rem, 15dvh, 5rem); }
-  .screen-shell .camera-view { height: min(30dvh, 210px); min-height: 0; aspect-ratio: auto; }
-  .screen-shell .sync-action { min-height: clamp(64px, 13dvh, 100px); }
-  .screen-shell .hold-action { height: clamp(68px, 17dvh, 118px); min-height: 0; }
-  .screen-shell .player-entry { padding: clamp(3px, .7dvh, 7px); }
-  .screen-shell .ar-clue { font-size: clamp(12px, 2dvh, 16px); }
-  .screen-shell .ar-instruction { font-size: clamp(12px, 1.8dvh, 15px); }
-  .screen-shell [aria-label^="Power"] { font-size: clamp(11px, 1.6dvh, 14px); }
-  .screen-shell [aria-label^="Power"] > div { height: 10px; }
-  .facility-hud { gap: 4px; }
-  .facility-card, .facility-message { padding: 5px 7px; font-size: 11px; }
-  .facility-controls button, .facility-calibrate button { min-height: 38px; padding: 4px 7px; font-size: 11px; }
-  .facility-hold { min-height: 58px !important; font-size: 18px !important; }
-}
-
-@media (max-height: 560px) {
-  .screen-shell { padding-top: max(2.35rem, calc(env(safe-area-inset-top) + 34px)); padding-inline: max(12px, env(safe-area-inset-left)); gap: 3px; }
-  .screen-shell button { min-height: 38px; font-size: 14px; }
-  .screen-shell .home-title { font-size: clamp(1.75rem, 10dvh, 2.8rem); }
-  .screen-shell .role-title { font-size: clamp(1.5rem, 7dvh, 2.5rem); }
-  .screen-shell .failure-title { font-size: clamp(2.2rem, 13dvh, 4rem); }
-  .screen-shell .camera-view { height: 25dvh; min-height: 0; }
-  .screen-shell .hold-action { height: clamp(60px, 15dvh, 84px); }
-  .screen-shell .player-entry { font-size: 13px; }
-  .screen-shell .result-title { font-size: clamp(1.8rem, 9dvh, 2.8rem); }
-  .screen-shell .ar-clue, .screen-shell .ar-instruction { font-size: 12px; line-height: 1; }
-  .facility-top, .facility-systems { font-size: 9px; }
-  .facility-legal { display: none; }
-}
-
-.app-portrait-fallback {
-  position: fixed;
-  z-index: 1;
-  top: 50%;
-  left: 50%;
-  width: 100dvh;
-  height: 100dvw;
-  overflow: hidden;
-  transform: translate(-50%, -50%) rotate(90deg);
-  transform-origin: center;
-  background: var(--color-void);
-}
-.app-portrait-fallback .screen-shell,
-.app-portrait-fallback .h-dvh { height: 100dvw; max-height: 100dvw; }
-
-/* On a laptop, keep the game upright in a phone-shaped preview instead of rotating the desktop. */
-@media (orientation: landscape) and (min-width: 700px) and (pointer: fine) {
-  .app-portrait-fallback {
-    position: fixed;
-    inset: 0;
-    display: flex;
-    justify-content: center;
-    width: 100vw;
-    height: 100dvh;
-    transform: none;
-    background: radial-gradient(ellipse at center, #16291d 0%, #06110b 68%);
-  }
-  .app-portrait-fallback .screen-shell,
-  .app-portrait-fallback .h-dvh { height: 100dvh; max-height: 100dvh; }
-  .app-portrait-fallback .screen-shell { width: min(100vw, 28rem); }
-}
-
-/* Keep game copy and small labels readable on phones while retaining viewport scaling. */
-body { font-size: clamp(17px, min(3dvh, 5.6vw), 24px); }
-.screen-shell p { font-size: clamp(16px, 2.6dvh, 23px); }
-.screen-shell [class~="text-[11px]"],
-.screen-shell [class~="text-[12px]"],
-.screen-shell [class~="text-[13px]"],
-.screen-shell [class~="text-[14px]"] { font-size: 16px; }
-.ar-screen .mission-heading { font-size: clamp(20px, 3dvh, 25px); }
-.ar-screen .ar-clue { font-size: clamp(15px, 2.3dvh, 18px); line-height: 1.1; }
-.ar-screen .ar-instruction { font-size: clamp(16px, 2.6dvh, 21px); line-height: 1.2; }
-.ar-screen [aria-label^="Power"] { font-size: clamp(14px, 2dvh, 16px); }
-.facility-chip, .facility-systems { font-size: 13px; }
-.facility-message, .facility-card { font-size: 15px; }
-.facility-legal { font-size: 12px; }
-
-@media (max-height: 560px) {
-  .screen-shell button { font-size: clamp(15px, 3.8dvh, 18px); }
-  .screen-shell [class~="text-[11px]"],
-  .screen-shell [class~="text-[12px]"],
-  .screen-shell [class~="text-[13px]"],
-  .screen-shell [class~="text-[14px]"] { font-size: 15px; }
-}
-
-/* A small, consistent type increase across all game screens. */
-body { font-size: clamp(18px, min(3.2dvh, 5.8vw), 25px); }
-.screen-shell p { font-size: clamp(17px, 2.8dvh, 24px); }
-.screen-shell .home-title {
-  width: 100%;
-  max-width: 100%;
-  font-size: clamp(40px, min(15vw, 9dvh), 64px);
-  line-height: .96;
-  overflow-wrap: anywhere;
-  text-wrap: balance;
-}
-.screen-shell .role-title { font-size: clamp(2rem, min(13vw, 8.5dvh), 3.5rem); }
-.screen-shell [class~="text-[16px]"] { font-size: clamp(18px, calc(16px + .25dvh), 19px); }
-.screen-shell [class~="text-[18px]"] { font-size: clamp(20px, calc(18px + .25dvh), 21px); }
-.screen-shell [class~="text-[20px]"] { font-size: clamp(22px, calc(20px + .25dvh), 23px); }
-.screen-shell [class~="text-[22px]"] { font-size: clamp(24px, calc(22px + .25dvh), 25px); }
-.screen-shell [class~="text-[24px]"] { font-size: clamp(26px, calc(24px + .25dvh), 27px); }
-.screen-shell [class~="text-[26px]"] { font-size: clamp(28px, calc(26px + .25dvh), 29px); }
-.screen-shell [class~="text-[28px]"] { font-size: clamp(30px, calc(28px + .25dvh), 31px); }
-.screen-shell [class~="text-[30px]"] { font-size: clamp(32px, calc(30px + .25dvh), 33px); }
-.screen-shell [class~="text-[32px]"] { font-size: clamp(34px, calc(32px + .25dvh), 35px); }
-.screen-shell [class~="text-[34px]"] { font-size: clamp(36px, calc(34px + .25dvh), 37px); }
-.screen-shell [class~="text-[38px]"] { font-size: clamp(40px, calc(38px + .25dvh), 41px); }
-.screen-shell [class~="text-[40px]"] { font-size: clamp(42px, calc(40px + .25dvh), 43px); }
-.screen-shell [class~="text-[44px]"] { font-size: clamp(46px, calc(44px + .25dvh), 47px); }
-.screen-shell [class~="text-[52px]"] { font-size: clamp(54px, calc(52px + .25dvh), 55px); }
-.screen-shell .result-title { font-size: clamp(2.1rem, 10.5dvh, 3.6rem); }
-.screen-shell .failure-title { font-size: clamp(2.8rem, 15dvh, 5.3rem); }
-.ar-screen .ar-instruction { font-size: clamp(17px, 2.8dvh, 22px); }
-
-/* Keep screen copy and headings inside the portrait frame, including long names and URLs. */
-.screen-shell :where(h1, h2, h3, p, span, label, button, li, dt, dd) {
-  box-sizing: border-box;
-  min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
-.screen-shell button { white-space: normal; line-height: 1.15; }
-.pwa-status > span { min-width: 0; overflow-wrap: anywhere; }
-.facility-hud :where(h1, h2, h3, p, span, label, button, li) {
-  min-width: 0;
-  max-width: 100%;
-  overflow-wrap: anywhere;
-}
