@@ -22,7 +22,10 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'three', 'jsqr', '@tensorflow/tfjs-core', '@tensorflow/tfjs-converter', '@tensorflow/tfjs-backend-webgl', '@tensorflow/tfjs-backend-cpu', '@tensorflow-models/coco-ssd', '@mediapipe/tasks-vision'],
   },
   server: {
-    allowedHosts: ['assume-surgeon-raid-predicted.trycloudflare.com'],
+    allowedHosts: [
+      'assume-surgeon-raid-predicted.trycloudflare.com',
+      'observer-convenient-collaborative-discrimination.trycloudflare.com',
+    ],
     fs: { allow: [fromHere('..')] },
   },
   // Second page: tester diagnostics (detector load/inference timing on the real device).
