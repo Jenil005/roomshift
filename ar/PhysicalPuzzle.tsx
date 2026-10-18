@@ -44,7 +44,7 @@ export type ScanMode = "ai" | "qr" | "manual";
  * Emits local evidence; the caller decides how to submit it to the game server.
  * onResult: arrangement held in order (send as `physical`). onScanSequence: the order the
  * QR tags were scanned in (send as `scanned`). Neither is proof; the server decides.
- * Modes: AI Scanner (default; AI for book and cup, QR tag for keys), QR Backup, Manual.
+ * Modes: AI Scanner (default; AI for book, cup and keyboard), QR Backup, Manual.
  * onScanningChange(true) while a camera scan is live, so the host can pause heavy rendering
  * (for example RoomScene.stop()) during detection.
  * serverJudged: the game server checks manual reports (the standalone demo has no server, so
@@ -376,7 +376,7 @@ function ManualOrder({
           order: order as MarkerId[],
           source: "manual",
           heldForMs: 0,
-          evidence: { book: "manual", cup: "manual", keys: "manual" },
+          evidence: { book: "manual", cup: "manual", keyboard: "manual" },
         });
       }}
     >

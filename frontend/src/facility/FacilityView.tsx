@@ -14,7 +14,7 @@ const HEIGHT_KEY = "roomshift.cameraHeight";
 
 const PHASE_TASK: Partial<Record<Room["phase"], string>> = {
   INTRO: "Briefing in progress. Explore the facility while you wait.",
-  PUZZLE_1: "The breaker is dead. Arrange the real objects, then scan them.",
+  PUZZLE_1: "Tap any object pedestal or SCAN OBJECTS. Scan a book, cup and keyboard.",
   PUZZLE_1_COMPLETE: "Breaker engaged. Emergency power flowing.",
   PUZZLE_2: "Comms terminal: tap its panels to build the shared boot order.",
   PUZZLE_2_COMPLETE: "Comms online. The blast door controller is waking.",
@@ -96,8 +96,12 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
     if (!session) return;
     return session.onHotspot((h: Hotspot) => {
       if (h.kind === "module" && phase === "PUZZLE_2" && h.id) void toggle(h.id as ModuleId);
+      if (h.kind === "station" && phase === "PUZZLE_1" && onScan) {
+        session.stopAR();
+        onScan();
+      }
     });
-  }, [session, phase, toggle]);
+  }, [session, phase, toggle, onScan]);
 
   if (!room) return null;
   const ar = status?.ar ?? false;
@@ -181,7 +185,7 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
 
         <div className="facility-controls">
           {room.phase === "PUZZLE_1" && onScan && (
-            <button type="button" className="primary" onClick={toScanner}>SCAN OBJECTS{ar ? " (ends AR)" : ""}</button>
+            <button type="button" className="primary" onClick={toScanner}>SCAN BOOK · CUP · KEYBOARD{ar ? " (ends AR)" : ""}</button>
           )}
           {room.phase === "FINAL_SEQUENCE" && (
             <button type="button" {...handlers} aria-pressed={holding} className={`facility-hold ${holding ? "is-holding" : ""}`}>

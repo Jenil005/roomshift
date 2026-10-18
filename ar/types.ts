@@ -36,13 +36,13 @@ export type PhysicalPuzzleResult = {
   evidence?: Partial<Record<MarkerId, EvidenceSource>>;
 };
 
-export const PHYSICAL_ORDER: readonly MarkerId[] = ["book", "cup", "keys"];
+export const PHYSICAL_ORDER: readonly MarkerId[] = ["book", "cup", "keyboard"];
 // Printed QR tag payload: exactly roomshift:v1:<objectId> (docs/AR_AGENT.md section 6).
 export const TAG_PREFIX = "roomshift:v1:";
 export const MARKER_LABEL: Record<MarkerId, string> = {
   book: "BOOK",
   cup: "CUP",
-  keys: "KEYS",
+  keyboard: "KEYBOARD",
 };
 
 export type ScanErrorCode =

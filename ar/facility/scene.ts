@@ -314,12 +314,12 @@ export function createFacility({ quality = "high" }: { quality?: FacilityQuality
   box(0.12, 0.05, 0.05, 0, 0.3, 0, rubber, lever);
   shadow(0.7, 0.4, -0.85, -D + 0.2);
 
-  /* Object stations (left side): research BOOK, containment CUP, access KEYS. */
+  /* Object stations (left side): research BOOK, containment CUP, access KEYBOARD. */
   const stationLamps: Record<string, THREE.Mesh> = {};
   const stationDefs = [
     { id: "book", name: "RESEARCH", z: -0.75 },
     { id: "cup", name: "CONTAINMENT", z: 0.0 },
-    { id: "keys", name: "ACCESS", z: 0.75 },
+    { id: "keyboard", name: "ACCESS", z: 0.75 },
   ];
   for (const s of stationDefs) {
     const g = new THREE.Group();

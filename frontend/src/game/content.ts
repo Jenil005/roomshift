@@ -2,7 +2,7 @@
 import type { ModuleId } from "@shared/puzzles/commsBoot";
 import type { ObjectId, RoleId, Room, SystemsState } from "@shared/types";
 
-export const OBJECT_LABEL: Record<ObjectId, string> = { book: "Book", cup: "Cup", keys: "Keys" };
+export const OBJECT_LABEL: Record<ObjectId, string> = { book: "Book", cup: "Cup", keyboard: "Keyboard" };
 
 export const ROLE_TITLE: Record<RoleId, string> = {
   engineer: "Field Engineer",

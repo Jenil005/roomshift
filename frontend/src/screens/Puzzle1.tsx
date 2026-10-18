@@ -47,7 +47,7 @@ export function Puzzle1() {
       <p className="ar-clue m-0 bg-inset p-3 bevel-sunken">
         <span className="text-label">Your fragment: </span>{clue?.clues.join(" ") ?? "Receiving…"}
       </p>
-      <p className="ar-instruction m-0">Arrange the book, cup and keys on a table, left to right, then let the scanner read them.</p>
+      <p className="ar-instruction m-0">Arrange the book, cup and keyboard on a table, left to right, then let the scanner read them.</p>
 
       {checking && <p role="status" className="m-0 text-phosphor">Evidence sent. The facility is checking it…</p>}
       {rejected && !checking && (

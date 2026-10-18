@@ -60,7 +60,7 @@ const HEADLINE: Record<OrderStatus, string> = {
 
 const GUIDANCE: Record<OrderStatus, string> = {
   incomplete:
-    "Point the camera at the book and the cup, and keep the KEYS QR tag in view.",
+    "Point at a real book, cup and keyboard. No QR code required.",
   duplicate:
     "More than one of the same object is visible. Keep only one in frame.",
   unaligned:
@@ -73,8 +73,7 @@ const GUIDANCE: Record<OrderStatus, string> = {
 
 /**
  * AI-first physical puzzle scanning: COCO-SSD finds BOOK and CUP; objects the model cannot
- * see (KEYS) are taken from their QR tag in the same frame. Emits local evidence only; it
- * never reports a result from AI sightings alone.
+ * see can be handled by optional QR backup. BOOK, CUP and KEYBOARD are AI-detectable.
  */
 export function AiScanner({
   onResult,
@@ -263,7 +262,7 @@ export function AiScanner({
                     ? DETECTOR_ERROR_MESSAGE[model.error ?? "model-failed"]
                     : camera.status === "starting"
                       ? "Allow camera access when your browser asks."
-                      : "AI finds the book and the cup. Keep the KEYS QR tag visible too."}
+                      : "AI finds the book, cup and keyboard. No QR code required."}
             </p>
             {model.status === "ready" &&
               (camera.status === "idle" || camera.status === "error") && (

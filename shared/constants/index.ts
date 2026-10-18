@@ -9,9 +9,9 @@ export const ROOM_CODE_LENGTH = 4;
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PLAYER_NAME_MAX_LENGTH = 20;
 
-// Physical objects for the P0 puzzle. Each gets a printed QR tag (marker id == object id).
-// The server matches ids case-insensitively (the AR module uses "BOOK", "CUP", "KEYS").
-export const OBJECT_IDS = ["book", "cup", "keys"] as const;
+// Physical objects for puzzle 1: real book, cup and keyboard. AI detection requires no QR.
+// The server matches ids case-insensitively.
+export const OBJECT_IDS = ["book", "cup", "keyboard"] as const;
 // Camera evidence must show the arrangement held steady this long (matches ar/physicalOrder.ts).
 export const PUZZLE1_HOLD_MS = 1_200;
 // Short pause after a wrong puzzle 1 attempt so a submit loop cannot flood the room.

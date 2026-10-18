@@ -6,10 +6,10 @@
 import { OBJECT_IDS, PUZZLE1_HOLD_MS } from '@shared/constants'
 import type { ObjectId, PhysicalEvidence } from '@shared/types'
 
-export const PUZZLE1_SOLUTION: readonly ObjectId[] = ['book', 'cup', 'keys']
+export const PUZZLE1_SOLUTION: readonly ObjectId[] = ['book', 'cup', 'keyboard']
 
 // Manual fallback when the camera fails: the objects' first letters in order, e.g. "BCK".
-const INITIALS: Record<string, ObjectId> = { B: 'book', C: 'cup', K: 'keys' }
+const INITIALS: Record<string, ObjectId> = { B: 'book', C: 'cup', K: 'keyboard' }
 
 // Normalized image coordinates may sit slightly outside [0, 1] at the frame edge.
 const COORD_MIN = -0.05

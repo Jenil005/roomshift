@@ -12,11 +12,11 @@ export type OtherSighting = {
   corners: ObjectSighting["corners"];
 };
 
-// COCO-SSD class name -> puzzle object. COCO has no "keys" class; keys come from a QR tag.
-// A custom model (for example a MediaPipe detector trained on keys) would add an entry here.
+// COCO class labels include book, cup and keyboard, so all three are AI-detectable.
 export const COCO_CLASS_MAP: Readonly<Record<string, MarkerId>> = {
   book: "book",
   cup: "cup",
+  keyboard: "keyboard",
 };
 
 /** Minimum score per detector class; `default` applies to every other class. */

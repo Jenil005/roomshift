@@ -20,6 +20,7 @@ export const MEDIAPIPE_CONFIDENCE: ConfidenceThresholds = {
   default: 0.5,
   book: 0.35,
   cup: 0.4,
+  keyboard: 0.45,
 };
 
 type Loaded = { detector: ObjectDetector; release: () => void };
@@ -72,7 +73,7 @@ async function load(wasmUrl: string, modelUrl: string): Promise<Loaded> {
   let released = false;
   const detector: ObjectDetector = {
     name: `MediaPipe EfficientDet-Lite0 (${delegate})`,
-    classMap: COCO_CLASS_MAP, // same COCO label names: book, cup. No keys class.
+    classMap: COCO_CLASS_MAP, // COCO labels: book, cup and keyboard.
     thresholds: MEDIAPIPE_CONFIDENCE,
     async detect(frame) {
       if (released || frame.width === 0 || frame.height === 0) return [];

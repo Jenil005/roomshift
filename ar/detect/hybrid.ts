@@ -33,14 +33,14 @@ export function evidenceById(
 
 /**
  * Guard used before an AI-mode result is reported: every object must be present, and AI
- * alone is never enough. At least one object must come from a non-AI source (the QR tag).
+ * alone is sufficient when all three mapped objects have valid AI evidence.
  */
 export function hybridEvidenceAccepted(
   sightings: readonly ObjectSighting[],
 ): boolean {
   const evidence = evidenceById(sightings);
   if (!MARKER_IDS.every((id) => evidence[id] !== undefined)) return false;
-  return MARKER_IDS.some((id) => evidence[id] !== "ai");
+  return true;
 }
 
 /** A sighting as the UI shows it: fresh this frame, or briefly remembered after a miss. */
