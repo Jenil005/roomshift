@@ -19,7 +19,7 @@ import { useSecondsUntil } from "../ui/time";
 // COCO-SSD by default; ?detector=mediapipe or ?detector=auto selects MediaPipe (see selectDetector).
 const loadDetector = () => loadPreferredDetector();
 
-export function Puzzle1() {
+export function Puzzle1({ preview = false }: { preview?: boolean } = {}) {
   const { room, clue, send, lastSubmit } = useGame();
   const [mode, setMode] = useState<ScanMode>("ai");
   const [armed, setArmed] = useState(0); // remounting the scanner re-arms it after a rejection
@@ -56,7 +56,13 @@ export function Puzzle1() {
         </p>
       )}
       <ServerError actions={["puzzle:submit"]} />
-      {retry > 0 ? (
+      {preview ? (
+        <div className="flex min-h-[38dvh] flex-col items-center justify-center gap-3 border-2 border-rule bg-inset p-4 text-center bevel-sunken">
+          <span className="font-display text-[22px] text-label">SCANNER PREVIEW</span>
+          <span className="text-soft">Camera scanning is disabled in the dev screen preview.</span>
+          <button type="button" className="min-h-12 border-2 border-panel px-4 font-display text-label">REPORT ORDER</button>
+        </div>
+      ) : retry > 0 ? (
         <p className="m-0 bg-inset p-4 text-center text-emergency bevel-sunken">Breaker resetting… {retry}s</p>
       ) : (
         <PhysicalPuzzle key={armed} initialMode={mode} onModeChange={setMode} onResult={onResult} loadDetector={loadDetector} serverJudged />
