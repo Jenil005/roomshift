@@ -6,6 +6,7 @@
 // XR8 is the ONLY camera owner; stopAR() releases the camera before anything else may use it.
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+import { reportDebug } from "../debugChannel";
 import { calibratedFloorY, floorPlacement, type Placement } from "./placement";
 import { createFacility, FACILITY_SIZE, type Facility, type FacilityQuality, type FacilityState, type Hotspot } from "./scene";
 
@@ -341,6 +342,7 @@ export class FacilitySession {
         },
         onCameraStatusChange: ({ status, stream }) => {
           if (!this.active || attempt !== this.generation) return stream?.getTracks().forEach((t) => t.stop());
+          reportDebug({ camera: `XR engine ${status}` });
           if (stream) {
             this.stream = stream;
             stream.getTracks().forEach((t) => t.addEventListener("ended", () => this.active && this.fail(new Error("The camera was interrupted.")), { once: true }));
@@ -370,9 +372,11 @@ export class FacilitySession {
   private onArFrame({ processCpuResult }: Parameters<NonNullable<PipelineModule["onUpdate"]>>[0]) {
     if (!this.active || !this.running) return;
     const now = performance.now();
+    const frameMs = now - this.lastFrame;
     this.lastFrame = now;
     this.tick();
     const reality = processCpuResult?.reality;
+    reportDebug({ frameMs, tracking: `${reality?.trackingStatus ?? "?"}${reality?.trackingReason ? ` / ${reality.trackingReason}` : ""}` });
     const normal = reality?.trackingStatus === "NORMAL" && reality?.trackingReason !== "INITIALIZING";
     this.normalSince = normal ? (this.normalSince ?? now) : null;
     this.tracking = this.normalSince !== null && now - this.normalSince >= TRACKING_STABLE_MS;
@@ -453,6 +457,7 @@ export class FacilitySession {
     }
     this.stream?.getTracks().forEach((t) => t.stop());
     this.stream = null;
+    reportDebug({ camera: "released", tracking: "stopped" });
     this.content.removeFromParent();
     this.arCanvas.hidden = true;
     this.arCamera = null;
@@ -464,6 +469,7 @@ export class FacilitySession {
   private fail(error: unknown, needsReload = false) {
     console.error("RoomShift facility:", error);
     const text = error instanceof Error ? error.message : String(error);
+    reportDebug({ error: `AR ${text}` });
     this.stopAR(`AR unavailable: ${text}`);
     this.set({ stage: "error", needsReload: needsReload || this.status.needsReload, canStartAr: this.status.engine === "ready" && !needsReload, message: `AR unavailable: ${text} Check HTTPS, Safari camera and motion permissions. The 3D preview (not AR) still works.` });
   }

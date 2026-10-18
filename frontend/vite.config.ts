@@ -3,14 +3,17 @@ import react from '@vitejs/plugin-react'
 import { defineConfig } from 'vite'
 import tailwindcss from '@tailwindcss/vite'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
 
 const fromHere = (path: string) => fileURLToPath(new URL(path, import.meta.url))
+const deps: Record<string, string> = JSON.parse(readFileSync(fromHere('./package.json'), 'utf8')).dependencies
+const runtimes = `XR Engine ${deps['@8thwall/engine-binary']} · MediaPipe ${deps['@mediapipe/tasks-vision']} · COCO-SSD ${deps['@tensorflow-models/coco-ssd']} · three ${deps.three}`
 
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  // Build id for the ?debug overlay (Netlify sets COMMIT_REF).
-  define: { __BUILD_SHA__: JSON.stringify((process.env.COMMIT_REF ?? 'local').slice(0, 7)) },
+  // Build id and runtime versions for the ?debug overlay (Netlify sets COMMIT_REF).
+  define: { __BUILD_SHA__: JSON.stringify((process.env.COMMIT_REF ?? 'local').slice(0, 7)), __RUNTIMES__: JSON.stringify(runtimes) },
   resolve: {
     // Canonical contracts live in ../shared (also used by the backend). Code imported from
     // ../ar and ../backend must use this package's single copy of React and friends, or hooks

@@ -1,3 +1,4 @@
+import { reportDebug } from "../debugChannel";
 import { detectMarkers } from "../detectMarkers";
 import type { DecodeRequest, DecodeResponse } from "../scan/decodeWorker";
 import { scanErrorCode, type ScanEndReason } from "../scan/CameraScanSession";
@@ -110,6 +111,7 @@ export class AiScanSession {
     }
     this.stream = stream;
     this.video = video;
+    reportDebug({ camera: "AI scanner live", detector: this.detector.name });
     stream.getVideoTracks().forEach((track) =>
       track.addEventListener("ended", () => this.end("track-ended"), {
         once: true,
@@ -136,6 +138,7 @@ export class AiScanSession {
     this.generation += 1;
     clearTimeout(this.timer);
     document.removeEventListener("visibilitychange", this.onVisibility);
+    if (this.stream) reportDebug({ camera: "released" });
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = undefined;
     if (this.video) this.video.srcObject = null;
@@ -151,6 +154,7 @@ export class AiScanSession {
 
   private fail(code: ScanErrorCode) {
     this.stop();
+    reportDebug({ error: `scanner ${code}` });
     this.errorCbs.forEach((cb) => cb({ code }));
   }
 
@@ -206,6 +210,7 @@ export class AiScanSession {
     }
     if (generation !== this.generation) return;
     const inferenceMs = performance.now() - at;
+    reportDebug({ inferenceMs });
     const { sightings, others } = mapDetections(
       raw,
       frameWidth,
