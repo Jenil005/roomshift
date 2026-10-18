@@ -26,8 +26,35 @@ export function scanErrorCode(error: unknown): ScanErrorCode {
   return "unknown";
 }
 
+// Rear camera preferred (phones); `ideal` keeps any camera acceptable (laptop webcams).
+export const PREFERRED_CAMERA: MediaStreamConstraints = {
+  video: {
+    facingMode: { ideal: "environment" },
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+  },
+  audio: false,
+};
+
 /**
- * Rear-camera QR scanning with decoding in a web worker (main-thread fallback).
+ * Opens the camera: the rear camera when there is one, otherwise whatever camera the device
+ * has. Some webcam drivers reject the size hints (OverconstrainedError) or report no match
+ * (NotFoundError); then any camera at all is tried once. Permission errors are not retried.
+ */
+export async function requestCamera(
+  mediaDevices: Pick<MediaDevices, "getUserMedia"> = navigator.mediaDevices,
+): Promise<MediaStream> {
+  try {
+    return await mediaDevices.getUserMedia(PREFERRED_CAMERA);
+  } catch (error) {
+    const name = error instanceof Error ? error.name : "";
+    if (name !== "OverconstrainedError" && name !== "NotFoundError") throw error;
+    return mediaDevices.getUserMedia({ video: true, audio: false });
+  }
+}
+
+/**
+ * Camera QR scanning (rear camera preferred) with decoding in a web worker (main-thread fallback).
  * onScan reports each tag once per sighting (debounced); onMarkers reports every decoded
  * frame for the arrangement check. The camera is released on stop() and when the page hides.
  */
@@ -76,14 +103,7 @@ export class CameraScanSession implements ScanSession {
       return this.fail("no-camera");
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      stream = await requestCamera();
     } catch (error) {
       if (generation === this.generation) this.fail(scanErrorCode(error));
       return;

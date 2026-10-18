@@ -5,7 +5,9 @@ import { facilityStateFrom } from "./state";
 import { useArScan } from "./useArScan";
 import { FacilitySession, type FacilityStatus } from "../../../ar/facility/session";
 import type { FacilityQuality, Hotspot } from "../../../ar/facility/scene";
-import { MARKER_IDS, MARKER_LABEL } from "../../../ar/types";
+import { MARKER_IDS } from "../../../ar/types";
+import { CHECKLIST_ORDER, CLUE_LABEL, SEQUENCE_HINT_TEXT } from "../../../ar/scan/objectScan";
+import { SCAN_ITEM_MARK, SCAN_ITEM_SPOKEN, SCAN_ITEM_TEXT, scanItemState } from "../../../ar/ScanProgress";
 import { usePuzzle1Scans } from "../game/usePuzzle1Scans";
 import { useGame } from "../game/useGame";
 import { useBootDraft } from "../ui/useBootDraft";
@@ -17,7 +19,7 @@ const HEIGHT_KEY = "roomshift.cameraHeight";
 
 const PHASE_TASK: Partial<Record<Room["phase"], string>> = {
   INTRO: "Briefing in progress. Explore the facility while you wait.",
-  PUZZLE_1: "Scan the book, cup and keyboard one at a time. In AR, tap SCAN IN AR and point at one object.",
+  PUZZLE_1: `${SEQUENCE_HINT_TEXT} In AR, tap SCAN IN AR and point at one object.`,
   PUZZLE_1_COMPLETE: "Breaker engaged. Emergency power flowing.",
   PUZZLE_2: "Comms terminal: tap its panels to build the shared boot order.",
   PUZZLE_2_COMPLETE: "Comms online. The blast door controller is waking.",
@@ -166,18 +168,19 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
         {(room.phase === "PUZZLE_1" || room.phase === "PUZZLE_1_COMPLETE") && (
           <section className="facility-card" aria-label="Object scan progress">
             <div className="text-label">Object scans (shared with your team)</div>
-            <ul className="facility-scans">
-              {MARKER_IDS.map((id) => {
-                const done = p1.scanned.includes(id);
+            {/* Clue words in a fixed, non-solution order; green only once the server accepted. */}
+            <ul className="facility-scans" aria-label="Scan checklist">
+              {CHECKLIST_ORDER.map((id) => {
+                const state = scanItemState(id, p1.scanned, p1.host.pending);
                 return (
-                  <li key={id} className={`${done ? "on" : ""} ${scan.justScanned === id ? "just-scanned" : ""}`} aria-label={`${MARKER_LABEL[id]}: ${done ? "scanned" : "not scanned"}`}>
-                    {done ? "✓" : "○"} {MARKER_LABEL[id]} {done ? "SCANNED" : "NOT SCANNED"}
+                  <li key={id} data-state={state} className={`${state === "accepted" ? "on" : state === "pending" ? "is-pending" : ""} ${scan.justScanned === id ? "just-scanned" : ""}`} aria-label={`${CLUE_LABEL[id]}: ${SCAN_ITEM_SPOKEN[state]}`}>
+                    {SCAN_ITEM_MARK[state]} {CLUE_LABEL[id]} {SCAN_ITEM_TEXT[state]}
                   </li>
                 );
               })}
             </ul>
             <div className={p1.solved ? "mt-1 text-phosphor" : "mt-1"}>
-              {p1.solved ? "BREAKER RESTORED — PUZZLE COMPLETE" : `PROGRESS ${p1.scanned.length}/${MARKER_IDS.length}`}
+              {p1.solved ? "BREAKER RESTORED — PUZZLE COMPLETE" : `PROGRESS ${p1.accepted.length}/${MARKER_IDS.length}`}
             </div>
             {arScan && room.phase === "PUZZLE_1" ? (
               <>

@@ -1,7 +1,7 @@
 import { reportDebug } from "../debugChannel";
 import { detectMarkers } from "../detectMarkers";
 import type { DecodeRequest, DecodeResponse } from "../scan/decodeWorker";
-import { scanErrorCode, type ScanEndReason } from "../scan/CameraScanSession";
+import { requestCamera, scanErrorCode, type ScanEndReason } from "../scan/CameraScanSession";
 import type {
   DetectedMarker,
   MarkerId,
@@ -92,14 +92,7 @@ export class AiScanSession {
       return this.fail("no-camera");
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
+      stream = await requestCamera();
     } catch (error) {
       if (generation === this.generation) this.fail(scanErrorCode(error));
       return;

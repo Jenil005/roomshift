@@ -6,7 +6,7 @@ import {
   crowdedText,
   decideFrame,
   LocalScanJudge,
-  scannedText,
+  signalVerifiedText,
 } from "../scan/objectScan";
 import type { MarkerId } from "../types";
 
@@ -94,12 +94,11 @@ describe("sequential scanning (one object per frame)", () => {
 });
 
 describe("scan messages", () => {
-  it("names the next object, then verifying", () => {
-    expect(scannedText("book", ["book"])).toBe("BOOK SCANNED ✓ — FIND THE CUP");
-    expect(scannedText("cup", ["book", "cup"])).toBe("CUP SCANNED ✓ — FIND THE KEYBOARD");
-    expect(scannedText("keyboard", ["book", "cup", "keyboard"])).toBe(
-      "KEYBOARD SCANNED ✓ — VERIFYING SEQUENCE",
-    );
+  it("counts verified signals without naming the next object", () => {
+    expect(signalVerifiedText(1)).toBe("SIGNAL VERIFIED — 1/3");
+    expect(signalVerifiedText(2)).toBe("SIGNAL VERIFIED — 2/3");
+    expect(signalVerifiedText(3)).toBe("SIGNAL VERIFIED — 3/3");
+    for (const n of [1, 2, 3]) expect(signalVerifiedText(n)).not.toMatch(/FIND|BOOK|CUP|KEYBOARD/);
   });
 
   it("detects newly added scans, including a teammate's", () => {

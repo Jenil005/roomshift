@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { SubmitData } from "@shared/events";
 import { PhysicalPuzzle, type ScanMode } from "../../../ar/PhysicalPuzzle";
 import { loadPreferredDetector, releaseDetectors } from "../../../ar/detect/selectDetector";
+import { SEQUENCE_HINT_TEXT } from "../../../ar/scan/objectScan";
 import type { PhysicalPuzzleResult } from "../../../ar/types";
 import { powerPercent } from "../game/content";
 import { toPuzzle1Submission } from "../game/evidence";
@@ -53,13 +54,13 @@ export function Puzzle1() {
   const manualRejected = mode === "manual" && lastSubmit?.puzzle === 1 && !lastSubmit.solved;
 
   return (
-    <Screen className="ar-screen">
+    <Screen className="ar-screen scanner-screen">
       <MissionHeader step="Puzzle 1 of 3" title="Breaker: scan sequence" />
       <p className="ar-clue m-0 bg-inset p-3 bevel-sunken">
         <span className="text-label">Your fragment: </span>{clue?.clues.join(" ") ?? "Receiving…"}
       </p>
       <p className="ar-instruction m-0">
-        Agree on the order with your team, then scan the book, cup and keyboard one at a time in that order. Each object stays scanned.
+        {SEQUENCE_HINT_TEXT} Scan one object at a time. Each object stays scanned.
       </p>
 
       {checking && <p role="status" className="m-0 text-phosphor">Report sent. The facility is checking it…</p>}

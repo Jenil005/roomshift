@@ -13,7 +13,6 @@ import {
  */
 
 export const SCAN_COMPLETE_TEXT = "BREAKER RESTORED — PUZZLE COMPLETE";
-export const VERIFYING_TEXT = "VERIFYING SEQUENCE";
 
 /** What one camera frame means for scan progress. */
 export type FrameDecision =
@@ -38,11 +37,34 @@ export function decideFrame(
   return seen ? { kind: "duplicate", id: seen.id } : { kind: "none" };
 }
 
-/** "BOOK SCANNED ✓ — FIND THE CUP" after the newest scan in `scanned`. */
-export function scannedText(id: MarkerId, scanned: readonly MarkerId[]): string {
-  const next = PHYSICAL_ORDER.find((o) => !scanned.includes(o));
-  return `${MARKER_LABEL[id]} SCANNED ✓ — ${next ? `FIND THE ${MARKER_LABEL[next]}` : VERIFYING_TEXT}`;
-}
+/**
+ * Player-facing checklist labels: each object's clue concept, never its name, so the list
+ * does not spell out what to scan. Presentation only; ids (and the server) are unchanged.
+ */
+export const CLUE_LABEL: Record<MarkerId, string> = {
+  book: "KNOWLEDGE",
+  cup: "CONTAINMENT",
+  keyboard: "ACCESS",
+};
+
+/**
+ * Fixed checklist order: alphabetical by clue word (ACCESS, CONTAINMENT, KNOWLEDGE), which
+ * is not the solution order. It never changes while scanning, so progress gives no hint.
+ */
+export const CHECKLIST_ORDER: readonly MarkerId[] = [...MARKER_IDS].sort((a, b) =>
+  CLUE_LABEL[a].localeCompare(CLUE_LABEL[b]),
+);
+
+/** Neutral instruction: the clues, not the scanner, tell players the sequence. */
+export const SEQUENCE_HINT_TEXT =
+  "Use your team's clues to determine the correct scanning sequence.";
+
+/** "SIGNAL VERIFIED — 1/3" once a scan is accepted. Never names the next object. */
+export const signalVerifiedText = (count: number) =>
+  `SIGNAL VERIFIED — ${count}/${MARKER_IDS.length}`;
+
+/** A recognized object queued for the server but not yet accepted. */
+export const SIGNAL_SAVING_TEXT = "SIGNAL DETECTED — SAVING…";
 
 export const alreadyScannedText = (id: MarkerId) => `${MARKER_LABEL[id]} ALREADY SCANNED`;
 
