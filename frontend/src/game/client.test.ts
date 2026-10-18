@@ -218,6 +218,26 @@ describe("game client against the real engine", () => {
     }
   });
 
+  it("never shows the previous phase's clue when new clues are dealt", async () => {
+    const g = await startedGame();
+    const { a, b } = g;
+    await a.client.send({ type: "intro:skip" });
+    const puzzle1Clue = b.client.getSnapshot().clue!.clues.join(" ");
+    const seen: string[] = [];
+    const off = b.client.subscribe(() => {
+      const s = b.client.getSnapshot();
+      if (s.room?.phase === "PUZZLE_2" && s.clue) seen.push(s.clue.clues.join(" "));
+    });
+    await a.client.send({ type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 1, physical: { source: "manual", order: ["book", "cup", "keys"] } } });
+    g.advance(PHASE_COMPLETE_HOLD_MS);
+    await b.client.send({ type: "player:heartbeat" }); // b sees PUZZLE_2 before its room:me returns
+    expect(b.client.getSnapshot().room!.phase).toBe("PUZZLE_2");
+    await flush();
+    off();
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen).not.toContain(puzzle1Clue);
+  });
+
   it("never sends client-side identity or verdicts the server would trust", async () => {
     const g = await startedGame();
     await g.a.client.send({ type: "intro:skip" });

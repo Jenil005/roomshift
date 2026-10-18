@@ -35,6 +35,8 @@ export interface ClientOptions {
 
 // Background requests never surface as user-facing errors (only as connection status).
 const BACKGROUND = new Set<ClientEvent["type"]>(["player:heartbeat", "room:me"]);
+// Phases whose start deals new private clues (engine: game:start -> INTRO, enterPuzzle2).
+const CLUE_PHASES = new Set<string>(["INTRO", "PUZZLE_2"]);
 // Replies meaning this seat or room no longer exists: forget the stored session.
 const SEAT_GONE = new Set(["not_in_room", "room_not_found"]);
 
@@ -123,7 +125,10 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     estimateOffset(room, current);
     const lobby = room.phase === "LOBBY" || room.phase === "READY";
     if (lobby) clueForPhase = null; // after game:reset the next INTRO deals new clues
-    update({ room, clue: lobby ? null : snap.clue });
+    // The server deals new clues when INTRO and PUZZLE_2 begin: never show the previous
+    // phase's clue as if it were current. The screen says "receiving" until room:me answers.
+    const newClues = CLUE_PHASES.has(room.phase) && (current?.code !== room.code || current.phase !== room.phase);
+    update({ room, clue: lobby || newClues ? null : snap.clue });
     if (!lobby) maybeRefreshClue(room);
   }
 
