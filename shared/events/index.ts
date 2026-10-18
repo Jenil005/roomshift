@@ -1,4 +1,4 @@
-import type { GamePhase, PrivateClue, PuzzleSubmission, RoleId, Room } from "../types";
+import type { GamePhase, ObjectId, ObjectScanInput, PrivateClue, PuzzleSubmission, RoleId, Room } from "../types";
 
 // Client -> server requests.
 // Transport: POST /api/game with JSON body `GameRequest`. Every request except room:create
@@ -10,6 +10,8 @@ export type ClientEvent =
   | { type: "room:ready"; ready: boolean }
   | { type: "game:start" } // host only
   | { type: "puzzle:submit"; submission: PuzzleSubmission }
+  | { type: "puzzle1:scan"; scan: ObjectScanInput } // one object, as soon as it is recognized
+  | { type: "puzzle1:restart" } // clears the team's puzzle 1 scan progress (not a failed attempt)
   | { type: "player:heartbeat" } // every HEARTBEAT_INTERVAL_MS while the page is open
   | { type: "room:me" } // returns the caller's PrivateClue
   | { type: "intro:skip" } // host only, INTRO -> PUZZLE_1 early
@@ -64,6 +66,19 @@ export interface SubmitData {
   room: Room;
 }
 
+// puzzle1:scan. Every outcome of a valid scan is ok:true:
+// - accepted: appended to the team's progress (room.puzzle1.scanned)
+// - duplicate: already in the progress; nothing changes and nothing is counted
+// - rejected: out of sequence; a failed attempt: progress is cleared and a cooldown starts
+// - solved: the last object completed the sequence; the breaker is online
+export interface ScanData {
+  status: "accepted" | "duplicate" | "rejected" | "solved";
+  object: ObjectId;
+  reason?: string; // set when rejected; short, safe to show
+  retryAfterMs?: number; // set when rejected
+  room: Room;
+}
+
 // Server -> client events. They are not pushed on a socket: they appear in Room.events
 // (with seq/at) on the live `rs_rooms` record (names may change to fit DeepSpace patterns)
 export type ServerEvent =
@@ -71,6 +86,8 @@ export type ServerEvent =
   | { type: "player:role"; playerId: string; role: RoleId }
   | { type: "puzzle:verified"; puzzle: 1 | 2; verifiedBy?: "camera" | "manual" }
   | { type: "puzzle:failed"; puzzle: 1 | 2; reason: string; retryAfterMs?: number }
+  | { type: "puzzle1:scanned"; object: ObjectId; playerId: string; count: number }
+  | { type: "puzzle1:restarted"; playerId: string }
   | { type: "game:advance"; to: GamePhase }
   | { type: "game:complete" }
   | { type: "puzzle2:draftUpdated"; order: string[] }

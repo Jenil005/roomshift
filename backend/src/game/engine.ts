@@ -28,10 +28,20 @@ import {
   ROLE_IDS,
   ROOM_IDLE_TTL_MS,
 } from '@shared/constants'
-import type { GameErrorCode, GameResult, JoinData, MeData, RoomData, ServerEvent, SubmitData } from '@shared/events'
+import type {
+  GameErrorCode,
+  GameResult,
+  JoinData,
+  MeData,
+  RoomData,
+  ScanData,
+  ServerEvent,
+  SubmitData,
+} from '@shared/events'
 import { checkOrder, describe, generatePuzzle, MODULES, type ModuleId } from '@shared/puzzles/commsBoot'
 import type {
   GamePhase,
+  ObjectScan,
   PhysicalEvidence,
   Player,
   PrivateClue,
@@ -42,7 +52,7 @@ import type {
   SystemsState,
 } from '@shared/types'
 import { FALLBACK_NARRATION } from '../narration/fallback'
-import { checkPuzzle1, dealPuzzle1Clues } from './puzzle1'
+import { checkPuzzle1, checkScan, dealPuzzle1Clues, type ScanInput, type VerifiedBy } from './puzzle1'
 
 const MAX_EVENTS = 20
 /** room:create on an existing code; the route retries with a fresh code. */
@@ -88,6 +98,9 @@ export interface GameState {
   systems: SystemsState
   puzzles: { 1: PuzzleProgress; 2: PuzzleProgress }
   clues: Record<string, string[]> // playerId -> private clue lines for the current puzzle
+  // Accepted puzzle 1 scans of the current attempt, in order. Optional: rooms stored before
+  // sequential scanning existed have no field and start with none.
+  puzzle1?: { scans: ObjectScan[] } | null
   puzzle2: Puzzle2State | null
   final: FinalState | null
   events: RoomEventEntry[]
@@ -118,10 +131,11 @@ export type EngineCommand =
       type: 'puzzle:submit'
       puzzle: 1 | 2
       physical?: PhysicalEvidence
-      scanned?: string[]
       manualCode?: string
       order?: string[]
     } & Authed)
+  | ({ type: 'puzzle1:scan'; scan: ScanInput } & Authed)
+  | ({ type: 'puzzle1:restart' } & Authed)
   | ({ type: 'puzzle2:draft'; order: string[] } & Authed)
   | ({ type: 'final:press'; held: boolean } & Authed)
   | ({ type: 'final:force' } & Authed)
@@ -177,6 +191,7 @@ export function toView(state: GameState): Room {
     puzzles: state.puzzles,
     version: state.version,
     events: state.events,
+    ...(state.puzzle1 ? { puzzle1: { scanned: state.puzzle1.scans } } : {}),
     ...(state.puzzle2
       ? { puzzle2: { draft: state.puzzle2.draft, hints: state.puzzle2.hints.slice(0, state.puzzle2.released) } }
       : {}),
@@ -359,6 +374,7 @@ function newState(code: string, host: ServerPlayer, now: number): GameState {
     systems: { breaker: false, terminal: false, door: false },
     puzzles: freshProgress(),
     clues: {},
+    puzzle1: null,
     puzzle2: null,
     final: null,
     events: [],
@@ -501,6 +517,7 @@ function apply(
         emit(state!, { type: 'player:role', playerId: p.id, role: roles[i] }, now)
       })
       state.clues = dealPuzzle1Clues(state.players.map((p) => p.id))
+      state.puzzle1 = { scans: [] }
       setPhase(state, 'INTRO', now)
       return { state, result: ok(room()) }
     }
@@ -514,6 +531,7 @@ function apply(
       state.systems = { breaker: false, terminal: false, door: false }
       state.puzzles = freshProgress()
       state.clues = {}
+      state.puzzle1 = null
       state.puzzle2 = null
       state.final = null
       setPhase(state, 'LOBBY', now)
@@ -532,6 +550,19 @@ function apply(
 
     case 'puzzle:submit':
       return command.puzzle === 1 ? submitPuzzle1(state, command, now) : submitPuzzle2(state, command, now)
+
+    case 'puzzle1:scan':
+      return scanPuzzle1(state, player.id, command.scan, now)
+
+    case 'puzzle1:restart': {
+      if (state.phase !== 'PUZZLE_1') return { state, result: fail('wrong_phase', 'The breaker puzzle is not active') }
+      const p1 = (state.puzzle1 ??= { scans: [] })
+      if (p1.scans.length > 0) {
+        p1.scans = []
+        emit(state, { type: 'puzzle1:restarted', playerId: player.id }, now)
+      }
+      return { state, result: ok(room()) }
+    }
 
     case 'puzzle2:draft': {
       if (state.phase !== 'PUZZLE_2' || !state.puzzle2) {
@@ -580,23 +611,70 @@ function submitPuzzle1(
   if (progress.retryAt !== undefined && now < progress.retryAt) {
     return { state, result: fail('cooldown', 'Breaker is resetting', progress.retryAt - now) }
   }
-  const check = checkPuzzle1({ physical: command.physical, scanned: command.scanned, manualCode: command.manualCode })
+  const check = checkPuzzle1({ physical: command.physical, manualCode: command.manualCode })
   if (check.kind === 'invalid') return { state, result: fail('bad_request', check.message) }
   if (check.kind === 'wrong') {
-    progress.attempts += 1
-    progress.lastFailure = check.reason
-    progress.retryAt = now + PUZZLE1_COOLDOWN_MS
-    emit(state, { type: 'puzzle:failed', puzzle: 1, reason: check.reason, retryAfterMs: PUZZLE1_COOLDOWN_MS }, now)
+    failPuzzle1(state, check.reason, now)
     return { state, result: submitResult(state, false, check.reason, PUZZLE1_COOLDOWN_MS) }
   }
+  solvePuzzle1(state, check.verifiedBy, now)
+  return { state, result: submitResult(state, true) }
+}
+
+/** One object scan. Progress is the team's and only grows by the next object in sequence. */
+function scanPuzzle1(
+  state: GameState,
+  playerId: string,
+  scan: ScanInput,
+  now: number,
+): { state: GameState; result: GameResult } {
+  if (state.phase !== 'PUZZLE_1') return { state, result: fail('wrong_phase', 'The breaker puzzle is not active') }
+  const progress = state.puzzles[1]
+  if (progress.retryAt !== undefined && now < progress.retryAt) {
+    return { state, result: fail('cooldown', 'Breaker is resetting', progress.retryAt - now) }
+  }
+  const p1 = (state.puzzle1 ??= { scans: [] })
+  const check = checkScan(scan, p1.scans)
+  if (check.kind === 'invalid') return { state, result: fail('bad_request', check.message) }
+  const result = (status: ScanData['status'], reason?: string): GameResult => {
+    const data: ScanData = { status, object: check.object, room: toView(state) }
+    if (reason) {
+      data.reason = reason
+      data.retryAfterMs = PUZZLE1_COOLDOWN_MS
+    }
+    return ok(data)
+  }
+  // A repeat sighting, or a retried request that already landed: nothing changes.
+  if (check.kind === 'duplicate') return { state, result: result('duplicate') }
+  if (check.kind === 'wrong') {
+    p1.scans = [] // controlled reset: the next attempt starts from the first object again
+    failPuzzle1(state, check.reason, now)
+    return { state, result: result('rejected', check.reason) }
+  }
+  p1.scans.push({ object: check.object, source: scan.source, by: playerId, at: now })
+  emit(state, { type: 'puzzle1:scanned', object: check.object, playerId, count: p1.scans.length }, now)
+  if (!check.complete) return { state, result: result('accepted') }
+  solvePuzzle1(state, 'camera', now)
+  return { state, result: result('solved') }
+}
+
+function failPuzzle1(state: GameState, reason: string, now: number): void {
+  const progress = state.puzzles[1]
+  progress.attempts += 1
+  progress.lastFailure = reason
+  progress.retryAt = now + PUZZLE1_COOLDOWN_MS
+  emit(state, { type: 'puzzle:failed', puzzle: 1, reason, retryAfterMs: PUZZLE1_COOLDOWN_MS }, now)
+}
+
+function solvePuzzle1(state: GameState, verifiedBy: VerifiedBy, now: number): void {
+  const progress = state.puzzles[1]
   progress.solved = true
-  progress.verifiedBy = check.verifiedBy
+  progress.verifiedBy = verifiedBy
   delete progress.lastFailure
   delete progress.retryAt
   state.systems.breaker = true
-  emit(state, { type: 'puzzle:verified', puzzle: 1, verifiedBy: check.verifiedBy }, now)
+  emit(state, { type: 'puzzle:verified', puzzle: 1, verifiedBy }, now)
   setPhase(state, 'PUZZLE_1_COMPLETE', now)
-  return { state, result: submitResult(state, true) }
 }
 
 function submitPuzzle2(

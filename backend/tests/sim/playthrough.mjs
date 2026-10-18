@@ -157,36 +157,30 @@ async function main() {
   await waitFor(() => live.latest?.phase === 'PUZZLE_1', 'server alarm advances INTRO -> PUZZLE_1 with no client requests', 6000)
   check(live.latest?.phase === 'PUZZLE_1', 'live view shows PUZZLE_1')
 
-  // --- puzzle 1: physical order (fake AR submissions) ---
-  const p1 = (submission) => api({ type: 'puzzle:submit', code, playerToken: tokB, submission: { puzzle: 1, ...submission } })
-  check((await p1({ scanned: ['book', 'phone', 'keys'] })).code === 'bad_request', 'unknown object id -> bad_request')
-  const wrong1 = await p1({ scanned: ['keys', 'cup', 'book'] })
-  check(wrong1.ok && wrong1.data.solved === false && wrong1.data.reason === 'Wrong order', 'wrong scan order -> solved:false', wrong1)
-  await sleep(1100) // puzzle 1 cooldown after a wrong attempt
-  // Exactly what ar/physicalOrder.ts toCameraResult() produces, extra fields included.
-  const arResult = (xs, heldForMs = 1300) => {
-    const markers = ['BOOK', 'CUP', 'KEYS'].map((id, i) => ({
-      id,
-      center: { x: xs[i], y: 0.5 },
-      corners: [0, 1, 2, 3].map(() => ({ x: xs[i], y: 0.5 })),
-    }))
-    return { solved: true, markers, detectedIds: markers.map((m) => m.id), order: ['BOOK', 'CUP', 'KEYS'], source: 'camera', heldForMs }
-  }
-  const lie = await p1({ physical: arResult([0.8, 0.5, 0.2]) })
-  check(lie.ok && lie.data.solved === false && lie.data.reason === 'Wrong order', 'AR result claiming solved, markers out of order -> rejected', lie)
-  const tooSoon = await p1({ physical: arResult([0.2, 0.5, 0.8]) })
-  check(tooSoon.code === 'cooldown' && tooSoon.status === 429, 'retry inside the 1 s puzzle 1 cooldown -> cooldown', tooSoon)
+  // --- puzzle 1: objects scanned one at a time (fake scanner requests) ---
+  const scan1 = (object, confidence = 0.8, token = tokB) =>
+    api({ type: 'puzzle1:scan', code, playerToken: token, scan: { object, source: 'ai', confidence } })
+  check((await scan1('phone')).code === 'bad_request', 'unknown object id -> bad_request')
+  check((await scan1('book', 0.1)).code === 'bad_request', 'low-confidence AI scan -> bad_request, not counted')
+  const legacy = await api({ type: 'puzzle:submit', code, playerToken: tokB, submission: { puzzle: 1, physical: { source: 'camera', markers: [], heldForMs: 1300 } } })
+  check(legacy.code === 'bad_request', 'old simultaneous camera evidence is no longer accepted', legacy)
+  const wrong1 = await scan1('cup')
+  check(wrong1.ok && wrong1.data.status === 'rejected' && wrong1.data.room.puzzle1.scanned.length === 0, 'out-of-sequence first scan -> rejected, progress reset', wrong1)
+  const tooSoon = await scan1('book')
+  check(tooSoon.code === 'cooldown' && tooSoon.status === 429, 'scan inside the 1 s puzzle 1 cooldown -> cooldown', tooSoon)
   await sleep(1100)
-  const shaky = await p1({ physical: arResult([0.2, 0.5, 0.8], 400) })
-  check(shaky.ok && shaky.data.reason === 'Hold the objects steady', 'AR result held too briefly -> rejected', shaky)
-  await sleep(1100)
-  const ok1 = await p1({ physical: arResult([0.2, 0.5, 0.8]) })
-  check(ok1.ok && ok1.data.solved && ok1.data.room.systems.breaker, 'AR camera evidence -> breaker online', ok1)
+  const book = await scan1('book')
+  check(book.ok && book.data.status === 'accepted', 'BOOK accepted', book)
+  const again = await scan1('book', 0.9, tokA)
+  check(again.ok && again.data.status === 'duplicate' && again.data.room.puzzle1.scanned.length === 1, 'BOOK seen again (other phone) -> duplicate, no new progress', again)
+  check((await scan1('cup')).data?.status === 'accepted', 'CUP accepted without BOOK in view')
+  const ok1 = await scan1('keyboard')
+  check(ok1.ok && ok1.data.status === 'solved' && ok1.data.room.systems.breaker, 'KEYBOARD completes the sequence -> breaker online', ok1)
   check(ok1.data?.room.puzzles[1].verifiedBy === 'camera', 'puzzle 1 recorded as verified by camera')
   const polled = await fetch(`${BASE}/api/game/room/${code.toLowerCase()}`).then((r) => r.json())
   check(polled.ok && polled.data.room.systems.breaker === true, 'GET /api/game/room/:code shows breaker online', polled)
   check(!JSON.stringify(polled).includes(tokA), 'polled view contains no token')
-  check((await p1({ scanned: ['book', 'cup', 'keys'] })).code === 'wrong_phase', 'duplicate puzzle 1 submit -> wrong_phase')
+  check((await scan1('book')).code === 'wrong_phase', 'scan after the solve -> wrong_phase')
   await waitFor(() => live.latest?.phase === 'PUZZLE_2', 'server auto-advances to PUZZLE_2', 8000)
   check(live.latest?.phase === 'PUZZLE_2', 'live view shows PUZZLE_2')
 

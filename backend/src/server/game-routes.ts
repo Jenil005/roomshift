@@ -58,24 +58,28 @@ const requestSchema = z.discriminatedUnion('type', [
     type: z.literal('puzzle:submit'),
     submission: z.object({
       puzzle: z.union([z.literal(1), z.literal(2)]),
-      // The AR module's PhysicalPuzzleResult; unknown keys (solved, detectedIds, corners) are stripped.
+      // Puzzle 1 manual report only (camera scans use puzzle1:scan); unknown keys are stripped.
       physical: z
         .object({
-          source: z.enum(['camera', 'manual']),
-          order: z.array(z.string().max(32)).max(8).optional(),
-          markers: z
-            .array(z.object({ id: z.string().max(32), center: z.object({ x: z.number(), y: z.number() }) }))
-            .max(8)
-            .optional(),
-          heldForMs: z.number().min(0).max(3_600_000).optional(),
+          source: z.literal('manual'),
+          order: z.array(z.string().max(32)).max(8),
         })
         .optional(),
-      scanned: z.array(z.string().max(32)).max(8).optional(),
       manualCode: z.string().max(32).optional(),
       order: z.array(z.string().max(32)).max(8).optional(),
     }),
     ...authed,
   }),
+  z.object({
+    type: z.literal('puzzle1:scan'),
+    scan: z.object({
+      object: z.string().max(32),
+      source: z.enum(['ai', 'qr']),
+      confidence: z.number().min(0).max(1).optional(),
+    }),
+    ...authed,
+  }),
+  z.object({ type: z.literal('puzzle1:restart'), ...authed }),
   z.object({ type: z.literal('puzzle2:draft'), order: z.array(z.string().max(32)).max(8), ...authed }),
   z.object({ type: z.literal('final:press'), held: z.boolean(), ...authed }),
   z.object({ type: z.literal('final:force'), ...authed }),
@@ -188,8 +192,12 @@ function toCommand(req: AuthedRequest, tokenHash: string): EngineCommand {
     case 'room:ready':
       return { type: req.type, tokenHash, ready: req.ready }
     case 'puzzle:submit': {
-      const { puzzle, physical, scanned, manualCode, order } = req.submission
-      return { type: req.type, tokenHash, puzzle, physical, scanned, manualCode, order }
+      const { puzzle, physical, manualCode, order } = req.submission
+      return { type: req.type, tokenHash, puzzle, physical, manualCode, order }
+    }
+    case 'puzzle1:scan': {
+      const { object, source, confidence } = req.scan
+      return { type: req.type, tokenHash, scan: { object, source, confidence } }
     }
     case 'puzzle2:draft':
       return { type: req.type, tokenHash, order: req.order }
