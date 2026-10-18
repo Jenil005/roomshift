@@ -136,6 +136,11 @@ test("two browsers play a full live mission: private clues, rejoin, sequential o
   await view("book");
   await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 60_000 });
   await expect(scannedA.getByLabel("BOOK: scanned")).not.toContainText("SAVING", { timeout: 15_000 }); // server accepted
+  // A reloads the page: the seat comes back and BOOK is still scanned (stored on the server).
+  await a.reload();
+  await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
+  await expect(scannedA.getByLabel("CUP: not scanned")).toBeVisible();
+  await a.getByRole("button", { name: /Start AI camera/ }).click({ timeout: 60_000 });
   await view("mug");
   await expect(scannedA.getByLabel("CUP: scanned")).toBeVisible({ timeout: 60_000 });
   await expect(scannedA.getByLabel("BOOK: scanned")).toBeVisible(); // still scanned, out of view

@@ -171,6 +171,11 @@ async function main() {
   await sleep(1100)
   const book = await scan1('book')
   check(book.ok && book.data.status === 'accepted', 'BOOK accepted', book)
+  // A phone reload rejoins with the stored token: the accepted scan comes back from storage.
+  const reloaded = await api({ type: 'room:join', code, playerName: 'Bea', playerToken: tokB })
+  check(reloaded.ok && reloaded.data.room.puzzle1?.scanned.map((s) => s.object).join() === 'book', 'reload (rejoin) recovers BOOK from the stored room', reloaded)
+  const polledScan = await fetch(`${BASE}/api/game/room/${code}`).then((r) => r.json())
+  check(polledScan.ok && polledScan.data.room.puzzle1?.scanned.length === 1, 'GET /api/game/room/:code shows the stored scan', polledScan)
   const again = await scan1('book', 0.9, tokA)
   check(again.ok && again.data.status === 'duplicate' && again.data.room.puzzle1.scanned.length === 1, 'BOOK seen again (other phone) -> duplicate, no new progress', again)
   check((await scan1('cup')).data?.status === 'accepted', 'CUP accepted without BOOK in view')
