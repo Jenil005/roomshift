@@ -19,17 +19,22 @@ CORS is open on `/api/*` (`Access-Control-Allow-Origin: *`, preflight allows `PO
 3. `room.systems` = `{ breaker, terminal, door }` drives the AR facility (breaker lights, terminal screen, exit door). `room.phase` drives screens. `room.events` (with `seq`) drives toasts and sounds.
 4. Private clues are never in `room`. Fetch with `room:me` after the phase leaves READY, when entering INTRO and PUZZLE_2 (new clues are dealt then), and after a reload. Do not show the previous phase's clue while the new one loads.
 
-## 3. Puzzle 1: physical order (BOOK, CUP, KEYS left to right)
+## 3. Puzzle 1: scan BOOK, CUP, KEYBOARD one at a time, in sequence
 
-1. Pass the AR module's `PhysicalPuzzleResult` straight through:
+1. Each newly recognized object is one request, sent as soon as it is recognized:
    ```ts
-   gameRequest({ type: 'puzzle:submit', submission: { roomCode: '', playerId: '', puzzle: 1, physical: result } }, session)
+   gameRequest({ type: 'puzzle1:scan', scan: { object: 'book', source: 'ai', confidence: 0.67 } }, session)
    ```
-   (`roomCode`/`playerId` are ignored by the server; identity comes from the token.)
-2. Camera results: the server re-derives the order from `markers[].center.x` and requires `heldForMs >= 1200`. `solved`, `order` and `detectedIds` from the client are ignored.
-3. Manual mode (`source: 'manual'`, `order`) is accepted and recorded as `room.puzzles[1].verifiedBy = 'manual'`, so the UI can say "verified manually".
-4. Marker ids match case-insensitively. A QR scan sequence (`scanned`) and a typed initials code (`manualCode: 'BCK'`) still work.
-5. A wrong arrangement returns `ok: true, data: { solved: false, reason, retryAfterMs: 1000 }`; submits during that second get `cooldown`. Malformed evidence returns `bad_request` and is not counted.
+   `source` is `'ai'` (with the detector's score, 0..1) or `'qr'` (a printed tag). The game client queues these (`client.scanObject`), sends them in order, and retries after a network error.
+2. Progress is the team's and lives on the server: `room.puzzle1.scanned` lists accepted scans in order (`{ object, source, by, at }`). It survives reloads, reconnects and switching between the scanner and the facility.
+3. Every valid scan returns `ok: true, data: ScanData` with `status`:
+   - `accepted`: the next object of the sequence, appended;
+   - `duplicate`: already scanned; nothing changes (a retried request is safe);
+   - `rejected`: out of sequence. Counted as a failed attempt: progress is cleared and `retryAfterMs: 1000` applies; scans during that second get `cooldown`;
+   - `solved`: the last object completed the sequence; the breaker is online and the phase moves to PUZZLE_1_COMPLETE.
+4. Refused without counting (`bad_request`): unknown object ids, and AI scans with no score or a score below `PUZZLE1_SCAN_MIN_CONFIDENCE` (0.35, a sanity floor; the phone's own per-detector bars are stricter). The server cannot check that a camera really saw the object: a scan is gameplay input, not proof.
+5. `puzzle1:restart` clears the team's progress (not a failed attempt). `game:reset` clears it too.
+6. Manual fallback: `puzzle:submit { puzzle: 1, physical: { source: 'manual', order } }` or `manualCode: 'BCK'`, recorded as `room.puzzles[1].verifiedBy = 'manual'`. Scans are recorded as `'camera'`. The old simultaneous-arrangement evidence (`markers`, `heldForMs`) and the `scanned` list are no longer accepted.
 
 ## 4. Puzzle 2 and finale
 

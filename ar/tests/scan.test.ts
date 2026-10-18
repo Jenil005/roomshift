@@ -46,7 +46,7 @@ describe("scan debounce", () => {
   it("tracks tags independently and resets cleanly", () => {
     const debouncer = new ScanDebouncer();
     expect(debouncer.accept("book", 0)).toBe(true);
-    expect(debouncer.accept("keys", 10)).toBe(true);
+    expect(debouncer.accept("keyboard", 10)).toBe(true);
     expect(debouncer.accept("book", 20)).toBe(false);
     debouncer.reset();
     expect(debouncer.accept("book", 30)).toBe(true);
@@ -64,15 +64,15 @@ describe("scan sequence", () => {
     expect(sequence.append("cup")).toBe(true);
     expect(sequence.append("book")).toBe(true);
     expect(sequence.append("cup")).toBe(false);
-    expect(sequence.append("keys")).toBe(true);
-    expect(sequence.current()).toEqual(["cup", "book", "keys"]);
+    expect(sequence.append("keyboard")).toBe(true);
+    expect(sequence.current()).toEqual(["cup", "book", "keyboard"]);
     sequence.clear();
     expect(sequence.current()).toEqual([]);
   });
   it("returns a copy that callers cannot use to mutate it", () => {
     const sequence = new ScanSequence();
     sequence.append("book");
-    sequence.current().push("keys");
+    sequence.current().push("keyboard");
     expect(sequence.current()).toEqual(["book"]);
   });
 });

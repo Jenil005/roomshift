@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const OBJECTS = [
   { id: "book", label: "BOOK", theme: "KNOWLEDGE" },
   { id: "cup", label: "CUP", theme: "CONTAINMENT" },
-  { id: "keys", label: "KEYS", theme: "ACCESS" },
+  { id: "keyboard", label: "KEYBOARD", theme: "ACCESS" },
 ];
 const payload = (id) => `roomshift:v1:${id}`;
 const out = (path) => fileURLToPath(new URL(path, import.meta.url));

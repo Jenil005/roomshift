@@ -1,15 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { bboxToMarker, coverTransform, iou } from "../detect/geometry";
-import {
-  adaptiveFrameGap,
-  AI_MAX_FRAME_GAP_MS,
-  AI_MIN_FRAME_GAP_MS,
-  evidenceById,
-  FrameIntervalMeter,
-  hybridEvidenceAccepted,
-  mergeHybrid,
-  SightingTracker,
-} from "../detect/hybrid";
+import { mergeHybrid, SightingTracker } from "../detect/hybrid";
 import {
   aiDetectableIds,
   AI_CONFIDENCE,
@@ -17,9 +8,12 @@ import {
   mapDetections,
   minScoreFor,
   qrOnlyIds,
+  scanCandidates,
+  AI_SCAN_CONFIDENCE,
+  scanScoreFor,
+  SCAN_MIN_CONFIDENCE,
   type RawDetection,
 } from "../detect/objectClasses";
-import { PhysicalOrderTracker, toCameraResult } from "../physicalOrder";
 import type { DetectedMarker, MarkerId, ObjectSighting } from "../types";
 
 const W = 640;
@@ -53,37 +47,29 @@ const aiSighting = (id: MarkerId, x: number, y = 0.5): ObjectSighting => ({
   label: id,
 });
 
-/** A correct hybrid frame: AI book and cup, QR keys. */
-const hybridFrame = (dx = 0): ObjectSighting[] =>
-  mergeHybrid(
-    [aiSighting("book", 0.2 + dx), aiSighting("cup", 0.5 + dx)],
-    [qr("keys", 0.8 + dx)],
-    ["keys"],
-  );
-
 describe("class mapping", () => {
-  it("maps COCO book and cup; keys is QR-only", () => {
-    expect(aiDetectableIds(COCO_CLASS_MAP)).toEqual(["book", "cup"]);
-    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual(["keys"]);
+  it("maps COCO book, cup and keyboard; nothing is QR-only", () => {
+    expect(aiDetectableIds(COCO_CLASS_MAP)).toEqual(["book", "cup", "keyboard"]);
+    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual([]);
   });
 
-  it("a custom model that knows keys needs no QR tag", () => {
-    const custom = { ...COCO_CLASS_MAP, keys: "keys" as const };
+  it("a custom model that knows keyboard needs no QR tag", () => {
+    const custom = { ...COCO_CLASS_MAP, keyboard: "keyboard" as const };
     expect(qrOnlyIds(custom)).toEqual([]);
   });
 
-  it("never invents keys from COCO output and keeps other classes separate", () => {
+  it("maps the COCO keyboard class and keeps other classes separate", () => {
     const { sightings, others } = mapDetections(
-      [det("cup", 0.9, 300), det("person", 0.8, 10), det("keys", 0.99, 500)],
+      [det("cup", 0.9, 300), det("person", 0.8, 10), det("keyboard", 0.99, 500)],
       W,
       H,
     );
-    expect(sightings.map((s) => s.id)).toEqual(["cup"]);
-    expect(sightings[0]).toMatchObject({ evidence: "ai", label: "cup", score: 0.9 });
-    expect(others.map((o) => o.label).sort()).toEqual(["keys", "person"]);
+    expect(sightings.map((s) => s.id)).toEqual(["keyboard", "cup"]); // strongest first
+    expect(sightings[1]).toMatchObject({ evidence: "ai", label: "cup", score: 0.9 });
+    expect(others.map((o) => o.label).sort()).toEqual(["person"]);
   });
 
-  it("ignores inherited object keys such as toString", () => {
+  it("ignores inherited object keyboard such as toString", () => {
     const { sightings } = mapDetections([det("toString", 0.9, 10)], W, H);
     expect(sightings).toEqual([]);
   });
@@ -169,169 +155,70 @@ describe("duplicate detections", () => {
     expect(sightings[0].score).toBe(0.9);
   });
 
-  it("keeps two separate cups so the order check reports a duplicate", () => {
+  it("keeps two separate cups, which the scanner sees as one candidate object", () => {
     const { sightings } = mapDetections(
       [det("book", 0.8, 10), det("cup", 0.9, 250), det("cup", 0.8, 500)],
       W,
       H,
     );
     expect(sightings.filter((s) => s.id === "cup")).toHaveLength(2);
-    const tracker = new PhysicalOrderTracker();
-    const frame = mergeHybrid(sightings, [qr("keys", 0.95)], ["keys"]);
-    expect(tracker.update(frame, 0).status).toBe("duplicate");
+    expect(scanCandidates(sightings).map((c) => c.id)).toEqual(["book", "cup"]);
   });
 });
 
 describe("hybrid AI + QR evidence", () => {
-  it("takes KEYS from QR and ignores QR tags for AI-detectable objects", () => {
+  it("takes KEYBOARD from QR and ignores QR tags for AI-detectable objects", () => {
     const merged = mergeHybrid(
       [aiSighting("book", 0.2)],
-      [qr("book", 0.25), qr("keys", 0.8)],
-      ["keys"],
+      [qr("book", 0.25), qr("keyboard", 0.8)],
+      ["keyboard"],
     );
     expect(merged.map((s) => `${s.id}:${s.evidence}`)).toEqual([
       "book:ai",
-      "keys:qr",
+      "keyboard:qr",
     ]);
   });
 
-  it("never accepts AI alone, nor a missing object", () => {
-    const aiOnly = [aiSighting("book", 0.2), aiSighting("cup", 0.5), aiSighting("keys", 0.8)];
-    expect(hybridEvidenceAccepted(aiOnly)).toBe(false);
-    expect(hybridEvidenceAccepted(hybridFrame().slice(0, 2))).toBe(false);
-    expect(hybridEvidenceAccepted(hybridFrame())).toBe(true);
-  });
-
-  it("records the evidence source per object in the result", () => {
-    const tracker = new PhysicalOrderTracker();
-    const frame = hybridFrame();
-    const result = toCameraResult(frame, tracker.update(frame, 0));
-    expect(result.evidence).toEqual({ book: "ai", cup: "ai", keys: "qr" });
-    expect(result.source).toBe("camera");
-    expect(evidenceById(frame)).toEqual(result.evidence);
-  });
-
-  it("plain QR markers are recorded as QR evidence", () => {
-    const tracker = new PhysicalOrderTracker();
-    const markers = [qr("book", 0.2), qr("cup", 0.5), qr("keys", 0.8)];
-    expect(toCameraResult(markers, tracker.update(markers, 0)).evidence).toEqual({
-      book: "qr",
-      cup: "qr",
-      keys: "qr",
-    });
-  });
 });
 
-describe("left-to-right arrangement with AI boxes", () => {
-  const ai = { maxFrameGapMs: 1000, maxCenterDrift: 0.06, maxRowSpread: 0.3, minHoldFrames: 3 };
-
-  it("orders by horizontal center regardless of detection order", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    const frame = hybridFrame().reverse();
-    expect(tracker.update(frame, 0)).toMatchObject({
-      status: "holding",
-      order: ["book", "cup", "keys"],
-    });
+describe("single-object scan candidates", () => {
+  it("counts an AI sighting only at or above its single-frame scan bar", () => {
+    expect(scanScoreFor("book")).toBe(AI_SCAN_CONFIDENCE.book);
+    expect(scanScoreFor("book")).toBeGreaterThan(AI_CONFIDENCE.book); // stricter than display
+    expect(scanScoreFor("keyboard")).toBe(AI_SCAN_CONFIDENCE.default);
+    const at = (id: MarkerId, score: number): ObjectSighting => ({ ...aiSighting(id, 0.5), score });
+    expect(scanCandidates([at("book", 0.49)])).toEqual([]);
+    expect(scanCandidates([at("book", 0.5)])).toEqual([{ id: "book", evidence: "ai", score: 0.5 }]);
+    expect(scanCandidates([at("cup", 0.58)])).toEqual([]);
   });
 
-  it("reports wrong order and missing objects, never verified", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    const wrong = mergeHybrid(
-      [aiSighting("cup", 0.2), aiSighting("book", 0.5)],
-      [qr("keys", 0.8)],
-      ["keys"],
-    );
-    expect(tracker.update(wrong, 0).status).toBe("wrong-order");
-    const noKeys = mergeHybrid([aiSighting("book", 0.2), aiSighting("cup", 0.5)], [], ["keys"]);
-    for (let t = 0; t <= 3000; t += 250)
-      expect(tracker.update(noKeys, t).status).toBe("incomplete");
+  it("never goes below the server's floor, whatever a detector declares", () => {
+    const lax = { default: 0.1 };
+    expect(scanScoreFor("book", lax)).toBe(SCAN_MIN_CONFIDENCE);
   });
 
-  it("tolerates the taller row spread of AI boxes", () => {
-    const frame = mergeHybrid(
-      [aiSighting("book", 0.2, 0.62), aiSighting("cup", 0.5, 0.45)],
-      [qr("keys", 0.8, 0.4)],
-      ["keys"],
-    );
-    expect(new PhysicalOrderTracker(ai).update(frame, 0).status).toBe("holding");
-    expect(new PhysicalOrderTracker().update(frame, 0).status).toBe("unaligned");
-  });
-});
-
-describe("stable-hold timing", () => {
-  const ai = { maxFrameGapMs: 1000, maxCenterDrift: 0.06, maxRowSpread: 0.3, minHoldFrames: 3 };
-
-  it("verifies after 1.2 s of fresh frames", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    const frame = hybridFrame();
-    for (const t of [0, 300, 600, 900]) expect(tracker.update(frame, t).status).toBe("holding");
-    expect(tracker.update(frame, 1200)).toMatchObject({ status: "verified", heldForMs: 1200 });
+  it("rejects missing or non-finite scores", () => {
+    const s = aiSighting("keyboard", 0.5);
+    expect(scanCandidates([{ ...s, score: undefined }])).toEqual([]);
+    expect(scanCandidates([{ ...s, score: Number.NaN }])).toEqual([]);
   });
 
-  it("needs the minimum number of fresh frames even after 1.2 s", () => {
-    const tracker = new PhysicalOrderTracker({ ...ai, maxFrameGapMs: 2500 });
-    const frame = hybridFrame();
-    expect(tracker.update(frame, 0).status).toBe("holding");
-    expect(tracker.update(frame, 1300).status).toBe("holding"); // 2 frames only
-    expect(tracker.update(frame, 2600).status).toBe("verified");
+  it("keeps the best sighting per object and accepts decoded QR tags", () => {
+    const frame: ObjectSighting[] = [
+      { ...aiSighting("cup", 0.2), score: 0.7 },
+      { ...aiSighting("cup", 0.6), score: 0.9 },
+      { ...qr("keyboard", 0.8), evidence: "qr" },
+    ];
+    expect(scanCandidates(frame)).toEqual([
+      { id: "cup", evidence: "ai", score: 0.9 },
+      { id: "keyboard", evidence: "qr" },
+    ]);
   });
 
-  it("a gap longer than allowed restarts the hold (stale evidence is not continuous)", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    const frame = hybridFrame();
-    tracker.update(frame, 0);
-    tracker.update(frame, 500);
-    expect(tracker.update(frame, 1600)).toMatchObject({ status: "holding", heldForMs: 0 });
-  });
-
-  it("box jitter within the AI drift limit is tolerated; larger motion restarts", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    tracker.update(hybridFrame(), 0);
-    expect(tracker.update(hybridFrame(0.04), 300).status).toBe("holding");
-    expect(tracker.update(hybridFrame(0.12), 600).status).toBe("unstable");
-  });
-
-  it("QR defaults are unchanged: 500 ms gap, one frame suffices", () => {
-    const tracker = new PhysicalOrderTracker();
-    const markers = [qr("book", 0.2), qr("cup", 0.5), qr("keys", 0.8)];
-    tracker.update(markers, 0);
-    expect(tracker.update(markers, 600).heldForMs).toBe(0); // 600 ms gap resets
-    tracker.update(markers, 1000);
-    expect(tracker.update(markers, 1400).status).toBe("holding");
-    expect(tracker.update(markers, 1800).status).toBe("verified");
-  });
-
-  it("configure() changes the gap between frames", () => {
-    const tracker = new PhysicalOrderTracker(ai);
-    const frame = hybridFrame();
-    tracker.update(frame, 0);
-    tracker.configure({ maxFrameGapMs: 2500 });
-    expect(tracker.update(frame, 1400).heldForMs).toBe(1400);
-  });
-});
-
-describe("adaptive AI frame gap", () => {
-  it("allows ~3 frame intervals within 1 s to 2.5 s", () => {
-    expect(adaptiveFrameGap(0)).toBe(AI_MIN_FRAME_GAP_MS);
-    expect(adaptiveFrameGap(Number.NaN)).toBe(AI_MIN_FRAME_GAP_MS);
-    expect(adaptiveFrameGap(250)).toBe(AI_MIN_FRAME_GAP_MS);
-    expect(adaptiveFrameGap(500)).toBe(1500);
-    expect(adaptiveFrameGap(1400)).toBe(AI_MAX_FRAME_GAP_MS);
-  });
-
-  it("smooths frame intervals and ignores time going backwards", () => {
-    const meter = new FrameIntervalMeter();
-    meter.sample(0);
-    expect(meter.interval).toBe(0);
-    meter.sample(300);
-    expect(meter.interval).toBe(300);
-    meter.sample(1300);
-    expect(meter.interval).toBeCloseTo(300 * 0.7 + 1000 * 0.3);
-    const before = meter.interval;
-    meter.sample(100);
-    expect(meter.interval).toBe(before);
-    meter.reset();
-    expect(meter.interval).toBe(0);
+  it("a lone keyboard is a complete candidate: no other object and no QR tag needed", () => {
+    expect(scanCandidates([aiSighting("keyboard", 0.5)])).toEqual([
+      { id: "keyboard", evidence: "ai", score: 0.8 },
+    ]);
   });
 });
 

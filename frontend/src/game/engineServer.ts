@@ -57,8 +57,13 @@ export function engineServer(now: () => number = Date.now, random: () => number 
         command = { type: body.type, tokenHash, ready: body.ready };
         break;
       case "puzzle:submit": {
-        const { puzzle, physical, scanned, manualCode, order } = body.submission;
-        command = { type: body.type, tokenHash, puzzle, physical, scanned, manualCode, order };
+        const { puzzle, physical, manualCode, order } = body.submission;
+        command = { type: body.type, tokenHash, puzzle, physical, manualCode, order };
+        break;
+      }
+      case "puzzle1:scan": {
+        const { object, source, confidence } = body.scan;
+        command = { type: body.type, tokenHash, scan: { object, source, confidence } };
         break;
       }
       case "puzzle2:draft":

@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import { DetectorError, type ObjectDetector } from "../../ar/detect/ObjectDetector";
 import { DEFAULT_DETECTOR, detectorPreference, loadPreferredDetector } from "../../ar/detect/selectDetector";
-import { MEDIAPIPE_CONFIDENCE } from "../../ar/detect/mediapipeDetector";
-import { AI_CONFIDENCE, COCO_CLASS_MAP, mapDetections, qrOnlyIds } from "../../ar/detect/objectClasses";
+import { MEDIAPIPE_CONFIDENCE, MEDIAPIPE_SCAN_CONFIDENCE } from "../../ar/detect/mediapipeDetector";
+import { AI_CONFIDENCE, COCO_CLASS_MAP, mapDetections, qrOnlyIds, scanCandidates } from "../../ar/detect/objectClasses";
 
 const fake = (name: string): ObjectDetector => ({ name, classMap: COCO_CLASS_MAP, detect: async () => [] });
 
@@ -54,8 +54,8 @@ describe("detector selection", () => {
 });
 
 describe("MediaPipe class mapping and thresholds", () => {
-  it("maps COCO labels, keeps keys QR-only, and applies MediaPipe's own thresholds", () => {
-    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual(["keys"]);
+  it("maps COCO labels including keyboard, and applies MediaPipe's own thresholds", () => {
+    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual([]);
     const raw = [
       { label: "book", score: 0.42, bbox: [247, 117, 155, 256] as [number, number, number, number] },
       { label: "book", score: 0.25, bbox: [2, 162, 167, 244] as [number, number, number, number] },
@@ -63,9 +63,12 @@ describe("MediaPipe class mapping and thresholds", () => {
       { label: "keyboard", score: 0.9, bbox: [0, 0, 50, 20] as [number, number, number, number] },
     ];
     const mp = mapDetections(raw, 640, 427, COCO_CLASS_MAP, MEDIAPIPE_CONFIDENCE);
-    expect(mp.sightings.map((s) => [s.id, s.score])).toEqual([["cup", 0.79], ["book", 0.42]]);
-    expect(mp.others.map((o) => o.label)).toEqual(["keyboard"]); // shown, never a puzzle object
+    expect(mp.sightings.map((s) => [s.id, s.score])).toEqual([["keyboard", 0.9], ["cup", 0.79], ["book", 0.42]]);
+    expect(mp.others).toEqual([]);
+    // MediaPipe's real book score (0.42) is enough to scan with its own scan bars, not COCO-SSD's.
+    expect(scanCandidates(mp.sightings, MEDIAPIPE_SCAN_CONFIDENCE).map((c) => c.id)).toEqual(["book", "cup", "keyboard"]);
+    expect(scanCandidates(mp.sightings).map((c) => c.id)).toEqual(["cup", "keyboard"]);
     // The same weak book box would be dropped by COCO-SSD's thresholds: scores are per model.
-    expect(mapDetections(raw, 640, 427, COCO_CLASS_MAP, AI_CONFIDENCE).sightings.map((s) => s.id)).toEqual(["cup"]);
+    expect(mapDetections(raw, 640, 427, COCO_CLASS_MAP, AI_CONFIDENCE).sightings.map((s) => s.id)).toEqual(["keyboard", "cup"]);
   });
 });

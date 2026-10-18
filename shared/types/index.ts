@@ -40,14 +40,34 @@ export interface PuzzleProgress {
   verifiedBy?: "camera" | "manual"; // puzzle 1: how the solve was evidenced
 }
 
-// Puzzle 1 evidence: the AR module's PhysicalPuzzleResult can be sent as-is (extra fields
-// such as `solved` and `detectedIds` are ignored). For source "camera" the server derives
-// the order from the marker centers itself and ignores `order`.
+// Puzzle 1 manual report (accessibility / no-camera fallback): the sequence the players
+// say they used. Recorded as verifiedBy "manual". Camera scans use puzzle1:scan instead.
 export interface PhysicalEvidence {
-  source: "camera" | "manual";
-  order?: string[]; // left to right; used for "manual"
-  markers?: { id: string; center: { x: number; y: number } }[]; // normalized image coordinates
-  heldForMs?: number;
+  source: "manual";
+  order: string[];
+}
+
+// One object scan sent with puzzle1:scan. `source` is how this phone saw it: on-device AI
+// (with the detector's score) or a printed QR tag. Client evidence is gameplay input; the
+// server cannot authenticate a detection it did not observe.
+export interface ObjectScanInput {
+  object: ObjectId;
+  source: "ai" | "qr";
+  confidence?: number; // required for "ai", 0..1
+}
+
+// An accepted scan in the current puzzle 1 attempt.
+export interface ObjectScan {
+  object: ObjectId;
+  source: "ai" | "qr";
+  by: string; // player id
+  at: number; // server epoch ms
+}
+
+// Puzzle 1 scan progress, shared by the team. Objects appear once each, in the order the
+// server accepted them. Cleared on an out-of-sequence scan, puzzle1:restart or game:reset.
+export interface Puzzle1PublicState {
+  scanned: ObjectScan[];
 }
 
 // Public room state. The backend mirrors this into the DeepSpace `rs_rooms` collection
@@ -67,6 +87,7 @@ export interface Room {
   puzzles: { 1: PuzzleProgress; 2: PuzzleProgress };
   version: number; // increments on every state change
   events: RoomEventEntry[]; // most recent server events, oldest first (bounded)
+  puzzle1?: Puzzle1PublicState; // present from PUZZLE_1 on
   puzzle2?: Puzzle2PublicState; // present from PUZZLE_2 on
   final?: FinalPublicState; // present during FINAL_SEQUENCE
 }
@@ -94,14 +115,13 @@ export interface PrivateClue {
   clues: string[];
 }
 
-// Puzzle 1 (physical): scan objects in the required order or combination.
-// Puzzle 2 (digital): submit the boot order of the comms modules.
+// Puzzle 1 (physical): camera scans go one object at a time through puzzle1:scan; this
+// submission carries only the manual fallback. Puzzle 2 (digital): the comms boot order.
 export interface PuzzleSubmission {
   roomCode: string; // ignored by the server: the room comes from the request's code + playerToken
   playerId: string; // ignored by the server: identity comes from playerToken
   puzzle: 1 | 2;
-  scanned?: ObjectId[]; // physical scan results
-  manualCode?: string; // manual entry fallback if camera fails
-  physical?: PhysicalEvidence; // puzzle 1: preferred, the AR module's result
+  manualCode?: string; // puzzle 1 manual fallback: initials in sequence, e.g. "BCK"
+  physical?: PhysicalEvidence; // puzzle 1 manual fallback: the AR module's manual report
   order?: string[]; // puzzle 2 module ids, see shared/puzzles/commsBoot.ts
 }

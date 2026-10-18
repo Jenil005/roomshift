@@ -37,7 +37,7 @@ export type AiFrame = {
 
 /**
  * Rear-camera AI scanning. Each cycle captures one frame, runs the detector on it and, for
- * the objects the detector cannot see (KEYS with COCO-SSD), decodes QR tags from the same
+ * the objects the detector cannot see (non-detectable classes), decodes QR tags from the same
  * frame in a worker. Frames are processed in memory and discarded; nothing is uploaded.
  * The camera is released on stop() and when the page hides.
  */

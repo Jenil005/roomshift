@@ -6,27 +6,27 @@ test("manual fallback validates the puzzle, labels the result, and resets", asyn
   await page.goto("/");
   await page.getByRole("button", { name: "Manual demo", exact: true }).click();
   await page
-    .getByRole("combobox", { name: "Left", exact: true })
+    .getByRole("combobox", { name: "First", exact: true })
     .selectOption("cup");
   await page
-    .getByRole("combobox", { name: "Middle", exact: true })
+    .getByRole("combobox", { name: "Second", exact: true })
     .selectOption("book");
   await page
-    .getByRole("combobox", { name: "Right", exact: true })
-    .selectOption("keys");
-  await page.getByRole("button", { name: "Check arrangement" }).click();
+    .getByRole("combobox", { name: "Third", exact: true })
+    .selectOption("keyboard");
+  await page.getByRole("button", { name: "Report sequence" }).click();
   await expect(page.getByRole("status")).toContainText("does not match");
   await page
-    .getByRole("combobox", { name: "Left", exact: true })
+    .getByRole("combobox", { name: "First", exact: true })
     .selectOption("book");
-  await page.getByRole("button", { name: "Check arrangement" }).click();
+  await page.getByRole("button", { name: "Report sequence" }).click();
   await expect(page.getByRole("status")).toContainText("each object once");
   await page
-    .getByRole("combobox", { name: "Middle", exact: true })
+    .getByRole("combobox", { name: "Second", exact: true })
     .selectOption("cup");
-  await page.getByRole("button", { name: "Check arrangement" }).click();
+  await page.getByRole("button", { name: "Report sequence" }).click();
   await expect(
-    page.getByRole("heading", { name: "Arrangement matched." }),
+    page.getByRole("heading", { name: "Sequence matched." }),
   ).toBeVisible();
   await expect(
     page.getByText("Camera verification was not used.", { exact: false }),
@@ -60,7 +60,7 @@ test("camera permission denial is recoverable without blocking the manual demo",
   await expect(page.getByRole("alert")).toContainText("Allow camera access");
   await page.getByRole("button", { name: "Manual demo", exact: true }).click();
   await expect(
-    page.getByRole("combobox", { name: "Left", exact: true }),
+    page.getByRole("combobox", { name: "First", exact: true }),
   ).toBeVisible();
 });
 
@@ -69,7 +69,7 @@ async function mockCamera(page: Page) {
     const state = window as typeof window & {
       cameraCalls: number;
       cameraTracks: MediaStreamTrack[];
-      markerOrder: string[];
+      visibleTags: string[];
       workersStarted: number;
     };
     state.workersStarted = 0;
@@ -82,7 +82,7 @@ async function mockCamera(page: Page) {
     };
     state.cameraCalls = 0;
     state.cameraTracks = [];
-    state.markerOrder = ["cup", "book", "keys"];
+    state.visibleTags = ["book", "cup", "keyboard"];
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         state.cameraCalls += 1;
@@ -91,7 +91,7 @@ async function mockCamera(page: Page) {
         canvas.height = 540;
         const context = canvas.getContext("2d")!;
         const images: Record<string, HTMLImageElement> = {};
-        for (const id of ["book", "cup", "keys"]) {
+        for (const id of ["book", "cup", "keyboard"]) {
           const image = new Image();
           image.src = `/markers/${id}.svg`;
           await image.decode();
@@ -100,7 +100,7 @@ async function mockCamera(page: Page) {
         const draw = () => {
           context.fillStyle = "#ffffff";
           context.fillRect(0, 0, canvas.width, canvas.height);
-          state.markerOrder.forEach((id, index) =>
+          state.visibleTags.forEach((id, index) =>
             context.drawImage(images[id], 30 + index * 310, 120, 280, 280),
           );
         };
@@ -122,11 +122,15 @@ async function mockCamera(page: Page) {
   });
 }
 
-test("camera decodes a live video frame, rejects wrong order, and verifies the corrected scene", async ({
+test("QR backup scans one tag at a time: crowded frames wait, wrong order resets, scans persist", async ({
   page,
 }) => {
   await mockCamera(page);
   await page.goto("/");
+  const showTags = (ids: string[]) =>
+    page.evaluate((v) => {
+      (window as typeof window & { visibleTags: string[] }).visibleTags = v;
+    }, ids);
   await page.getByRole("button", { name: "QR backup" }).click();
   expect(
     await page.evaluate(
@@ -134,21 +138,32 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
     ),
   ).toBe(0);
   await page.getByRole("button", { name: "Enable camera" }).click();
-  await expect(page.getByRole("status")).toContainText("Revisit the clues", {
-    timeout: 15000,
-  });
-  await expect(page.locator(".marker-overlay polygon")).toHaveCount(3);
-  // Decoding runs in a web worker, and each tag lands once in the scan sequence.
+  // All three tags at once: decoded and drawn, but nothing is recorded.
+  await expect(page.locator(".marker-overlay polygon")).toHaveCount(3, { timeout: 15000 });
+  await expect(page.getByText(/IN VIEW — SCAN ONE OBJECT AT A TIME/)).toBeVisible();
+  const progress = page.getByRole("progressbar", { name: "Objects scanned" });
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
+  // Decoding runs in a web worker.
   expect(
     await page.evaluate(
       () =>
         (window as typeof window & { workersStarted: number }).workersStarted,
     ),
   ).toBeGreaterThan(0);
-  const sequence = page.getByLabel("Scan order");
-  for (const label of ["BOOK", "CUP", "KEYS"])
-    await expect(sequence).toContainText(label);
-  expect((await sequence.textContent())!.match(/BOOK/g)).toHaveLength(1);
+
+  // CUP first is out of sequence: the local attempt resets.
+  await showTags(["cup"]);
+  await expect(page.getByText("CUP SCANNED OUT OF SEQUENCE — START AGAIN")).toBeVisible({ timeout: 15000 });
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
+
+  const list = page.getByLabel("Scanned objects");
+  await showTags(["book"]);
+  await expect(list.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 15000 });
+  await showTags([]);
+  await page.waitForTimeout(1000);
+  await expect(list.getByLabel("BOOK: scanned")).toBeVisible(); // off-frame, still scanned
+  await showTags(["book", "cup"]); // BOOK is already scanned, so CUP is the one new tag
+  await expect(list.getByLabel("CUP: scanned")).toBeVisible({ timeout: 15000 });
   await page.screenshot({
     path: "test-results/camera-puzzle.png",
     fullPage: true,
@@ -156,13 +171,7 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
   await expect(
     page.getByRole("heading", { name: "Connection restored." }),
   ).toHaveCount(0);
-  await page.evaluate(() => {
-    (window as typeof window & { markerOrder: string[] }).markerOrder = [
-      "book",
-      "cup",
-      "keys",
-    ];
-  });
+  await showTags(["keyboard"]);
   await expect(
     page.getByRole("heading", { name: "Connection restored." }),
   ).toBeVisible({ timeout: 20000 });

@@ -32,7 +32,7 @@ export function DevScreenPreview({ screen }: { screen: DevScreen }) {
     mode: "mock",
     room: screen === "gameover" ? null : { ...previewRoom, phase: screen === "lobby" ? "LOBBY" : "PUZZLE_1" },
     selfId: "dev-player",
-    clue: screen === "puzzle1" ? { playerId: "dev-player", role: "engineer", text: "BOOK LEFT CUP CENTER KEYS RIGHT", clues: ["BOOK LEFT", "CUP CENTER", "KEYS RIGHT"] } : null,
+    clue: screen === "puzzle1" ? { playerId: "dev-player", role: "engineer", text: "Knowledge is scanned first. Access is scanned last.", clues: ["Knowledge is scanned first.", "Access is scanned last."] } : null,
     connection: "idle",
     resuming: false,
     pending: null,
@@ -43,6 +43,7 @@ export function DevScreenPreview({ screen }: { screen: DevScreen }) {
       at: now,
     } : null,
     lastSubmit: null,
+    scans: { pending: [], last: null },
     serverTimeOffset: 0,
   }), [screen]);
 
@@ -53,6 +54,8 @@ export function DevScreenPreview({ screen }: { screen: DevScreen }) {
       send: async () => ({ ok: true, data: {} }),
       clearError: () => {},
       refresh: async () => snapshot.room,
+      scanObject: () => {},
+      restartScans: async () => ({ ok: true, data: {} }),
       start: () => {},
       stop: () => {},
     };

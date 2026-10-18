@@ -9,9 +9,10 @@ import {
   MAX_PLAYERS,
   PHASE_COMPLETE_HOLD_MS,
   PUZZLE1_COOLDOWN_MS,
+  PUZZLE1_SCAN_MIN_CONFIDENCE,
   ROOM_IDLE_TTL_MS,
 } from '@shared/constants'
-import type { MeData, SubmitData } from '@shared/events'
+import type { MeData, ScanData, SubmitData } from '@shared/events'
 import { MODULES } from '@shared/puzzles/commsBoot'
 import { nextDeadline, reduce, toView, type EngineCommand, type GameState } from './engine'
 import { PUZZLE1_SOLUTION } from './puzzle1'
@@ -264,12 +265,22 @@ function atPuzzle1() {
   return g
 }
 
-const submit1 = (g: ReturnType<typeof game>, extra: { scanned?: string[]; manualCode?: string }, tokenHash = 'h1') =>
+const submit1 = (g: ReturnType<typeof game>, extra: { manualCode?: string }, tokenHash = 'h1') =>
   g.run({ type: 'puzzle:submit', tokenHash, puzzle: 1, ...extra })
+
+const scan = (g: ReturnType<typeof game>, object: string, tokenHash = 'h1', confidence = 0.8) =>
+  g.run({ type: 'puzzle1:scan', tokenHash, scan: { object, source: 'ai', confidence } })
+
+type ScanResult = { ok: true; data: ScanData }
+const scanData = (out: ReturnType<typeof scan>) => (out.result as ScanResult).data
+
+function scanAll(g: ReturnType<typeof game>) {
+  for (const object of PUZZLE1_SOLUTION) scan(g, object)
+}
 
 function atPuzzle2() {
   const g = atPuzzle1()
-  submit1(g, { scanned: ['book', 'cup', 'keys'] })
+  scanAll(g)
   g.advance(PHASE_COMPLETE_HOLD_MS)
   g.run({ type: 'tick' })
   expect(g.state!.phase).toBe('PUZZLE_2')
@@ -290,66 +301,142 @@ function atFinal() {
   return g
 }
 
-describe('puzzle 1 (physical order)', () => {
-  it('only accepts submissions during PUZZLE_1', () => {
+describe('puzzle 1 (sequential object scans)', () => {
+  it('only accepts scans, restarts and reports during PUZZLE_1', () => {
     const g = startedGame()
-    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(scan(g, 'book').result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(g.run({ type: 'puzzle1:restart', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(submit1(g, { manualCode: 'bck' }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
   })
 
-  it('rejects malformed scans without counting an attempt', () => {
+  it('keeps BOOK scanned while CUP and then KEYBOARD are scanned on their own', () => {
     const g = atPuzzle1()
-    expect(submit1(g, { scanned: ['book', 'phone', 'keys'] }).result).toMatchObject({ ok: false, code: 'bad_request' })
-    expect(submit1(g, { scanned: ['book', 'book', 'keys'] }).result).toMatchObject({ ok: false, code: 'bad_request' })
-    expect(submit1(g, {}).result).toMatchObject({ ok: false, code: 'bad_request' })
-    expect(g.state!.puzzles[1].attempts).toBe(0)
-  })
-
-  it('counts wrong and partial orders as failed attempts and records the event', () => {
-    const g = atPuzzle1()
-    const wrong = submit1(g, { scanned: ['cup', 'book', 'keys'] }).result
-    expect(wrong).toMatchObject({ ok: true, data: { solved: false, reason: 'Wrong order', retryAfterMs: PUZZLE1_COOLDOWN_MS } })
-    // A retry inside the short cooldown is refused and not counted.
-    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'cooldown' })
-    g.advance(PUZZLE1_COOLDOWN_MS)
-    const partial = submit1(g, { scanned: ['book', 'cup'] }).result
-    expect(partial).toMatchObject({ ok: true, data: { solved: false, reason: 'Not all objects detected' } })
-    g.advance(PUZZLE1_COOLDOWN_MS)
-    expect(submit1(g, { manualCode: 'XYZ' }).result).toMatchObject({ ok: true, data: { solved: false } })
-    expect(g.state!.puzzles[1]).toMatchObject({ attempts: 3, solved: false })
-    expect(g.state!.phase).toBe('PUZZLE_1')
-    expect(g.state!.events.at(-1)).toMatchObject({ type: 'puzzle:failed', puzzle: 1 })
-  })
-
-  it('a correct scan sets the breaker online, completes, then auto-advances', () => {
-    const g = atPuzzle1()
-    const res = submit1(g, { scanned: ['book', 'cup', 'keys'] }).result
-    expect(res).toMatchObject({ ok: true, data: { solved: true } })
+    expect(toView(g.state!).puzzle1).toEqual({ scanned: [] })
+    expect(scanData(scan(g, 'book'))).toMatchObject({ status: 'accepted', object: 'book' })
+    // BOOK is not sent again: CUP alone is the next scan, as if BOOK had left the frame.
+    expect(scanData(scan(g, 'cup'))).toMatchObject({ status: 'accepted', object: 'cup' })
+    expect(toView(g.state!).puzzle1!.scanned.map((s) => s.object)).toEqual(['book', 'cup'])
+    expect(g.state!.systems.breaker).toBe(false) // no success before the last object
+    const last = scanData(scan(g, 'keyboard'))
+    expect(last).toMatchObject({ status: 'solved', object: 'keyboard' })
+    expect(last.room.puzzle1!.scanned.map((s) => s.object)).toEqual(['book', 'cup', 'keyboard'])
     expect(g.state!.phase).toBe('PUZZLE_1_COMPLETE')
     expect(g.state!.systems.breaker).toBe(true)
-    expect(submit1(g, { scanned: ['book', 'cup', 'keys'] }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(g.state!.puzzles[1]).toMatchObject({ solved: true, verifiedBy: 'camera', attempts: 0 })
+    const counts = g.state!.events.flatMap((e) => (e.type === 'puzzle1:scanned' ? [e.count] : []))
+    expect(counts).toEqual([1, 2, 3])
+    expect(scan(g, 'book').result).toMatchObject({ ok: false, code: 'wrong_phase' })
     expect(nextDeadline(g.state)).toBe(g.state!.phaseStartedAt + PHASE_COMPLETE_HOLD_MS)
   })
 
-  it('accepts the manual fallback code', () => {
+  it('records who scanned and how, and shares progress across the team', () => {
     const g = atPuzzle1()
-    expect(submit1(g, { manualCode: 'b-c-k' }).result).toMatchObject({ ok: true, data: { solved: true } })
-    expect(g.state!.puzzles[1].verifiedBy).toBe('manual')
+    scan(g, 'book', 'h0')
+    g.run({ type: 'puzzle1:scan', tokenHash: 'h1', scan: { object: 'cup', source: 'qr' } })
+    expect(toView(g.state!).puzzle1!.scanned).toMatchObject([
+      { object: 'book', source: 'ai', by: 'p0' },
+      { object: 'cup', source: 'qr', by: 'p1' },
+    ])
   })
 
-  it('accepts AR camera evidence and records how it was verified', () => {
+  it('a duplicate sighting changes nothing: no progress, no event, no new version', () => {
     const g = atPuzzle1()
-    const physical = {
-      source: 'camera' as const,
-      heldForMs: 1500,
-      markers: [
-        { id: 'CUP', center: { x: 0.5, y: 0.5 } },
-        { id: 'BOOK', center: { x: 0.2, y: 0.5 } },
-        { id: 'KEYS', center: { x: 0.8, y: 0.5 } },
-      ],
-    }
+    scan(g, 'book')
+    const before = { version: g.state!.version, seq: g.state!.seq }
+    const again = scan(g, 'BOOK')
+    expect(scanData(again)).toMatchObject({ status: 'duplicate', object: 'book' })
+    expect(again.viewChanged).toBe(false)
+    expect({ version: g.state!.version, seq: g.state!.seq }).toEqual(before)
+    expect(g.state!.puzzle1!.scans).toHaveLength(1)
+    expect(g.state!.puzzles[1].attempts).toBe(0)
+  })
+
+  it('refuses low-confidence, unknown and malformed scans without counting or changing progress', () => {
+    const g = atPuzzle1()
+    scan(g, 'book')
+    expect(scan(g, 'cup', 'h1', PUZZLE1_SCAN_MIN_CONFIDENCE - 0.1).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(scan(g, 'phone').result).toMatchObject({ ok: false, code: 'bad_request' })
+    const noScore = g.run({ type: 'puzzle1:scan', tokenHash: 'h1', scan: { object: 'cup', source: 'ai' } })
+    expect(noScore.result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(g.state!.puzzle1!.scans.map((s) => s.object)).toEqual(['book'])
+    expect(g.state!.puzzles[1].attempts).toBe(0)
+  })
+
+  it('an out-of-sequence scan is a failed attempt: progress resets and the cooldown applies', () => {
+    const g = atPuzzle1()
+    scan(g, 'book')
+    const wrong = scanData(scan(g, 'keyboard'))
+    expect(wrong).toMatchObject({
+      status: 'rejected',
+      object: 'keyboard',
+      reason: 'KEYBOARD scanned out of sequence',
+      retryAfterMs: PUZZLE1_COOLDOWN_MS,
+    })
+    expect(wrong.room.puzzle1!.scanned).toEqual([])
+    expect(g.state!.puzzles[1]).toMatchObject({ attempts: 1, solved: false, lastFailure: 'KEYBOARD scanned out of sequence' })
+    expect(g.state!.events.at(-1)).toMatchObject({ type: 'puzzle:failed', puzzle: 1 })
+    // Inside the cooldown a scan is refused and not counted.
+    expect(scan(g, 'book').result).toMatchObject({ ok: false, code: 'cooldown' })
+    g.advance(PUZZLE1_COOLDOWN_MS)
+    expect(scanData(scan(g, 'cup')).status).toBe('rejected') // the attempt starts from the first object again
+    expect(g.state!.puzzles[1].attempts).toBe(2)
+    g.advance(PUZZLE1_COOLDOWN_MS)
+    scanAll(g)
+    expect(g.state!.phase).toBe('PUZZLE_1_COMPLETE')
+  })
+
+  it('puzzle1:restart clears progress without counting a failure', () => {
+    const g = atPuzzle1()
+    scan(g, 'book')
+    scan(g, 'cup')
+    expect(g.run({ type: 'puzzle1:restart', tokenHash: 'h0' }).result.ok).toBe(true)
+    expect(toView(g.state!).puzzle1!.scanned).toEqual([])
+    expect(g.state!.puzzles[1].attempts).toBe(0)
+    expect(g.state!.events.at(-1)).toMatchObject({ type: 'puzzle1:restarted', playerId: 'p0' })
+    expect(scanData(scan(g, 'book')).status).toBe('accepted')
+  })
+
+  it('a reconnect keeps accepted progress, and a re-sent scan does not duplicate it', () => {
+    const g = atPuzzle1()
+    scan(g, 'book')
+    g.advance(DISCONNECT_AFTER_MS + 1)
+    g.run({ type: 'tick' })
+    expect(g.state!.players.find((p) => p.id === 'p1')!.connected).toBe(false)
+    const rejoin = g.run({ type: 'room:join', playerId: 'new', playerName: 'Bea', tokenHash: 'x', rejoinTokenHash: 'h1' })
+    expect(rejoin.result).toMatchObject({ ok: true, data: { rejoined: true, room: { puzzle1: { scanned: [{ object: 'book' }] } } } })
+    // The phone retries the request whose reply it lost.
+    expect(scanData(scan(g, 'book')).status).toBe('duplicate')
+    expect(scanData(scan(g, 'cup')).status).toBe('accepted')
+    expect(g.state!.puzzle1!.scans.map((s) => s.object)).toEqual(['book', 'cup'])
+  })
+
+  it('works for a room stored before scan progress existed', () => {
+    const g = atPuzzle1()
+    delete g.state!.puzzle1
+    expect(toView(g.state!).puzzle1).toBeUndefined()
+    expect(scanData(scan(g, 'book')).status).toBe('accepted')
+  })
+
+  it('game:reset clears scan progress', () => {
+    const g = atPuzzle1()
+    scan(g, 'book')
+    g.run({ type: 'game:reset', tokenHash: 'h0' })
+    expect(toView(g.state!).puzzle1).toBeUndefined()
+  })
+
+  it('keeps the manual fallback, recorded as manual, with its own failures and cooldown', () => {
+    const g = atPuzzle1()
+    expect(submit1(g, {}).result).toMatchObject({ ok: false, code: 'bad_request' })
+    expect(submit1(g, { manualCode: 'cbk' }).result).toMatchObject({
+      ok: true,
+      data: { solved: false, reason: 'Wrong order', retryAfterMs: PUZZLE1_COOLDOWN_MS },
+    })
+    expect(submit1(g, { manualCode: 'bck' }).result).toMatchObject({ ok: false, code: 'cooldown' })
+    g.advance(PUZZLE1_COOLDOWN_MS)
+    const physical = { source: 'manual' as const, order: ['BOOK', 'CUP', 'KEYBOARD'] }
     const res = g.run({ type: 'puzzle:submit', tokenHash: 'h1', puzzle: 1, physical }).result
-    expect(res).toMatchObject({ ok: true, data: { solved: true, room: { puzzles: { 1: { verifiedBy: 'camera' } } } } })
-    expect(g.state!.events.find((e) => e.type === 'puzzle:verified')).toMatchObject({ puzzle: 1, verifiedBy: 'camera' })
+    expect(res).toMatchObject({ ok: true, data: { solved: true, room: { puzzles: { 1: { verifiedBy: 'manual' } } } } })
+    expect(g.state!.events.find((e) => e.type === 'puzzle:verified')).toMatchObject({ puzzle: 1, verifiedBy: 'manual' })
   })
 })
 
@@ -612,7 +699,7 @@ describe('reset and full digital playthrough', () => {
       g.state!.players.forEach((p) => g.run({ type: 'room:ready', tokenHash: p.tokenHash, ready: true }))
       g.run({ type: 'game:start', tokenHash: 'h0' })
       g.run({ type: 'intro:skip', tokenHash: 'h0' })
-      submit1(g, { scanned: ['book', 'cup', 'keys'] })
+      scanAll(g)
       g.advance(PHASE_COMPLETE_HOLD_MS)
       g.run({ type: 'tick' })
       expect(Object.values(g.state!.clues).every((c) => c.length >= 1)).toBe(true)

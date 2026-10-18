@@ -18,12 +18,21 @@ export type GameView = ClientSnapshot & {
   send: (event: ClientEvent) => Promise<GameResult>;
   clearError: () => void;
   refresh: () => Promise<Room | null>;
+  scanObject: GameClient["scanObject"];
+  restartScans: GameClient["restartScans"];
 };
 
 export function useGame(): GameView {
   const client = useGameClient();
   const snap = useSyncExternalStore(client.subscribe, client.getSnapshot);
-  return { ...snap, send: client.send, clearError: client.clearError, refresh: client.refresh };
+  return {
+    ...snap,
+    send: client.send,
+    clearError: client.clearError,
+    refresh: client.refresh,
+    scanObject: client.scanObject,
+    restartScans: client.restartScans,
+  };
 }
 
 /** The current player's public entry, if any. */

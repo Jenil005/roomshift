@@ -3,7 +3,6 @@
 //   (cd backend && npx deepspace dev start --port 5199)
 //   ROOMSHIFT_API=http://127.0.0.1:5199 npm test -- tests/live-backend.test.ts
 import { describe, expect, it } from "vitest";
-import { PUZZLE1_HOLD_MS } from "@shared/constants";
 import { allOrders, describe as describeConstraint, MODULES, type Constraint } from "@shared/puzzles/commsBoot";
 import type { Room } from "@shared/types";
 import { createGameClient } from "../src/game/client";
@@ -96,13 +95,19 @@ describe.skipIf(!API)("live backend, two independent clients", () => {
       await a.client.send({ type: "intro:skip" });
       await until(b2.client, (r) => r.phase === "PUZZLE_1", "PUZZLE_1");
 
-      const wrong = { roomCode: "", playerId: "", puzzle: 1 as const, physical: { source: "camera" as const, heldForMs: PUZZLE1_HOLD_MS, markers: [{ id: "CUP", center: { x: 0.2, y: 0.5 } }, { id: "BOOK", center: { x: 0.5, y: 0.5 } }, { id: "KEYS", center: { x: 0.8, y: 0.5 } }] } };
-      await b2.client.send({ type: "puzzle:submit", submission: wrong });
-      expect(b2.client.getSnapshot().lastSubmit).toMatchObject({ solved: false, reason: "Wrong order" });
+      // Sequential object scans: a wrong first object is rejected, then the right sequence.
+      const scan = async (object: "book" | "cup" | "keyboard") => {
+        b2.client.scanObject({ object, source: "ai", confidence: 0.8 });
+        for (let i = 0; i < 40 && b2.client.getSnapshot().scans.pending.length; i++) await sleep(100);
+      };
+      await scan("cup");
+      expect(b2.client.getSnapshot().scans.last).toMatchObject({ object: "cup", status: "rejected" });
       await sleep(1_100);
-      const right = { ...wrong, physical: { ...wrong.physical, markers: [{ id: "KEYS", center: { x: 0.85, y: 0.52 } }, { id: "BOOK", center: { x: 0.15, y: 0.5 } }, { id: "CUP", center: { x: 0.5, y: 0.48 } }] } };
-      await b2.client.send({ type: "puzzle:submit", submission: right });
-      expect(b2.client.getSnapshot().lastSubmit?.solved).toBe(true);
+      await scan("book");
+      await until(a.client, (r) => r.puzzle1?.scanned.length === 1, "A sees BOOK scanned");
+      await scan("cup");
+      await scan("keyboard");
+      expect(b2.client.getSnapshot().scans.last).toMatchObject({ object: "keyboard", status: "solved" });
       await until(a.client, (r) => r.systems.breaker && r.puzzles[1].verifiedBy === "camera", "A sees breaker online");
 
       await until(a.client, (r) => r.phase === "PUZZLE_2", "PUZZLE_2", 10_000);

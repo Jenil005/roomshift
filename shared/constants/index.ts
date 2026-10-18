@@ -9,12 +9,17 @@ export const ROOM_CODE_LENGTH = 4;
 export const ROOM_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ";
 export const PLAYER_NAME_MAX_LENGTH = 20;
 
-// Physical objects for the P0 puzzle. Each gets a printed QR tag (marker id == object id).
-// The server matches ids case-insensitively (the AR module uses "BOOK", "CUP", "KEYS").
-export const OBJECT_IDS = ["book", "cup", "keys"] as const;
-// Camera evidence must show the arrangement held steady this long (matches ar/physicalOrder.ts).
-export const PUZZLE1_HOLD_MS = 1_200;
-// Short pause after a wrong puzzle 1 attempt so a submit loop cannot flood the room.
+// Physical objects for puzzle 1: real book, cup and keyboard. AI detection requires no QR.
+// The server matches ids case-insensitively.
+export const OBJECT_IDS = ["book", "cup", "keyboard"] as const;
+// Puzzle 1 is scanned one object at a time (puzzle1:scan) in this sequence. The clues
+// describe it; the server keeps its own copy (backend/src/game/puzzle1.ts) and judges.
+// The server refuses an AI scan whose reported detector score is below this floor: the lowest
+// single-frame scan bar of any supported detector (ar/detect: MediaPipe books, 0.4), with
+// margin. It is a sanity check on client input, not proof: the server never sees the camera.
+export const PUZZLE1_SCAN_MIN_CONFIDENCE = 0.35;
+// Short pause after a wrong puzzle 1 attempt (an out-of-sequence scan or a wrong manual
+// report) so a submit loop cannot flood the room.
 export const PUZZLE1_COOLDOWN_MS = 1_000;
 
 // If the host is disconnected this long, the host role passes to a connected player

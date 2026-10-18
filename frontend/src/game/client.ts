@@ -4,13 +4,17 @@
 //   returned by every request; older versions are ignored so the snapshot never goes back
 // - presence: player:heartbeat every HEARTBEAT_INTERVAL_MS
 // - private clue: room:me after every phase change (clues change at INTRO and PUZZLE_2)
+// - puzzle 1 scans: queued in recognition order and sent one at a time; kept (and stored) until
+//   the server answers, so a dropped connection or a reload does not lose a recognized object
 import { HEARTBEAT_INTERVAL_MS } from "@shared/constants";
-import type { ClientEvent, GameRequest, GameResult, JoinData, MeData, SubmitData } from "@shared/events";
-import type { Room } from "@shared/types";
-import type { ClientError, ClientSnapshot, ConnectionStatus, GameClient } from "./GameClient";
+import type { ClientEvent, GameRequest, GameResult, JoinData, MeData, ScanData, SubmitData } from "@shared/events";
+import type { ObjectScanInput, Room } from "@shared/types";
+import type { ClientError, ClientSnapshot, ConnectionStatus, GameClient, ScanOutcome } from "./GameClient";
 import type { Transport, TransportResult } from "./transport";
 
 export const SESSION_KEY = "roomshift.session.v2";
+export const SCANS_KEY = "roomshift.scans.v1";
+export const SCAN_RETRY_MS = 1_500;
 export const POLL_INTERVAL_MS = 1_000;
 // The shared boot-order draft is edited by several phones at once: poll faster there.
 export const FAST_POLL_INTERVAL_MS = 500;
@@ -66,8 +70,13 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     pending: null,
     lastError: null,
     lastSubmit: null,
+    scans: { pending: [], last: null },
     serverTimeOffset: 0,
   };
+  let scanQueue: ObjectScanInput[] = loadScans();
+  if (scanQueue.length) snap.scans = { pending: scanQueue.map((s) => s.object), last: null };
+  let scanInFlight = false;
+  let scanTimer: ReturnType<typeof setTimeout> | undefined;
   const listeners = new Set<() => void>();
   let running = false;
   let pollTimer: ReturnType<typeof setTimeout> | undefined;
@@ -96,6 +105,78 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     }
   }
 
+  // Queued scans belong to one room; a stored queue for another room is dropped.
+  function loadScans(): ObjectScanInput[] {
+    try {
+      const raw = storage?.getItem(SCANS_KEY);
+      const parsed = raw ? (JSON.parse(raw) as { code?: string; pending?: ObjectScanInput[] }) : null;
+      return parsed && session && parsed.code === session.code && Array.isArray(parsed.pending) ? parsed.pending : [];
+    } catch {
+      return [];
+    }
+  }
+  function setScanQueue(next: ObjectScanInput[], last: ScanOutcome | null = snap.scans.last) {
+    scanQueue = next;
+    try {
+      if (next.length && session) storage?.setItem(SCANS_KEY, JSON.stringify({ code: session.code, pending: next }));
+      else storage?.removeItem(SCANS_KEY);
+    } catch {
+      // Blocked storage: the queue still lives in memory.
+    }
+    update({ scans: { pending: next.map((s) => s.object), last } });
+  }
+
+  function scanObject(scan: ObjectScanInput) {
+    const room = snap.room;
+    if (!session || room?.phase !== "PUZZLE_1") return;
+    if (room.puzzle1?.scanned.some((s) => s.object === scan.object)) return; // already accepted
+    if (scanQueue.some((s) => s.object === scan.object)) return; // already queued or in flight
+    const last = snap.scans.last;
+    if (last?.retryAt !== undefined && now() < last.retryAt) return; // breaker resetting
+    setScanQueue([...scanQueue, scan]);
+    void flushScans();
+  }
+
+  /** Sends queued scans in order, one request at a time. */
+  async function flushScans() {
+    if (scanInFlight || !session) return;
+    clearTimeout(scanTimer);
+    scanTimer = undefined;
+    while (scanQueue.length > 0 && session) {
+      const head = scanQueue[0];
+      scanInFlight = true;
+      const res = await request<ScanData>({ type: "puzzle1:scan", scan: head });
+      scanInFlight = false;
+      if (scanQueue[0] !== head) continue; // restarted or forgotten meanwhile
+      const at = now();
+      if (res.network || (!res.ok && (res.code === "rate_limited" || res.code === "server_error"))) {
+        // Keep it; the server dedupes, so a retry of a request that did land is harmless.
+        const wait = !res.ok && res.retryAfterMs !== undefined ? res.retryAfterMs : SCAN_RETRY_MS;
+        if (running) scanTimer = setTimeout(() => void flushScans(), wait);
+        return;
+      }
+      if (res.ok) {
+        const d = res.data;
+        const last: ScanOutcome = { object: d.object, status: d.status, at };
+        if (d.reason) last.reason = d.reason;
+        if (d.retryAfterMs !== undefined) last.retryAt = at + d.retryAfterMs;
+        // A rejected scan resets the attempt on the server: later queued scans are void.
+        setScanQueue(d.status === "rejected" || d.status === "solved" ? [] : scanQueue.slice(1), last);
+      } else {
+        const last: ScanOutcome = { object: head.object, status: "error", reason: res.message, at };
+        if (res.retryAfterMs !== undefined) last.retryAt = at + res.retryAfterMs;
+        // Cooldown / wrong phase void the whole queue; a malformed scan only drops itself.
+        setScanQueue(res.code === "bad_request" ? scanQueue.slice(1) : [], last);
+      }
+    }
+  }
+
+  async function restartScans(): Promise<GameResult> {
+    clearTimeout(scanTimer);
+    setScanQueue([], null);
+    return send({ type: "puzzle1:restart" });
+  }
+
   function update(patch: Partial<ClientSnapshot>) {
     let changed = false;
     for (const key of Object.keys(patch) as (keyof ClientSnapshot)[]) {
@@ -115,6 +196,9 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     saveSession(null);
     clueForPhase = null;
     stopLoops();
+    clearTimeout(scanTimer);
+    scanTimer = undefined;
+    setScanQueue([], null);
     update({ room: null, selfId: null, clue: null, connection: "idle", resuming: false, pending: null, lastSubmit: null, lastError: error });
   }
 
@@ -130,6 +214,12 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     const newClues = CLUE_PHASES.has(room.phase) && (current?.code !== room.code || current.phase !== room.phase);
     update({ room, clue: lobby || newClues ? null : snap.clue });
     if (!lobby) maybeRefreshClue(room);
+    // PUZZLE_1_COMPLETE keeps the outcome of the solving scan on screen.
+    if (room.phase !== "PUZZLE_1" && room.phase !== "PUZZLE_1_COMPLETE") {
+      if (scanQueue.length || snap.scans.last) setScanQueue([], null);
+    } else if (scanQueue.length && !scanInFlight && scanTimer === undefined) {
+      void flushScans(); // e.g. queued before a reload, or the connection is back
+    }
   }
 
   // Server events carry server timestamps: a new event's `at` is <= server now, so
@@ -240,7 +330,9 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
       return res;
     }
     const { code, playerId, playerToken, room } = res.data;
+    const previousCode = session?.code;
     saveSession({ code, playerId, playerToken, name: playerName });
+    if (previousCode !== code) setScanQueue([], null);
     clueForPhase = null;
     update({ selfId: playerId, room: null, clue: null, lastError: null, lastSubmit: null, connection: "live" });
     applyRoom(room);
@@ -332,6 +424,8 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
       return () => listeners.delete(listener);
     },
     send,
+    scanObject,
+    restartScans,
     clearError: () => update({ lastError: null }),
     async refresh() {
       if (!session) return null;
@@ -351,6 +445,8 @@ export function createGameClient(transport: Transport, options: ClientOptions = 
     stop() {
       running = false;
       stopLoops();
+      clearTimeout(scanTimer);
+      scanTimer = undefined;
       visibility?.removeEventListener("visibilitychange", onVisible);
       if (typeof window !== "undefined") window.removeEventListener("online", onOnline);
     },

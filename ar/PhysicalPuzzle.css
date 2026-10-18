@@ -460,3 +460,63 @@
   border-color: #5f7a8a;
   color: #b9d3df;
 }
+
+/* Sequential scanning: NOT SCANNED (amber) / SCANNED (green ✓), k/3 progress. */
+.scanner-panel .scan-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.scanner-panel .scan-chip.is-waiting {
+  border-color: #6b5422;
+  color: #e7b45a;
+  background: #251d0e;
+}
+.scanner-panel .scan-chip.is-scanned {
+  border-color: #3fbf6a;
+  color: #8dffb0;
+  background: #12301c;
+}
+.scanner-panel .scan-check {
+  font-weight: 700;
+}
+.scanner-panel .scan-chip.just-scanned {
+  animation: scan-confirm 0.9s ease-out;
+}
+@keyframes scan-confirm {
+  0% { transform: scale(1); box-shadow: 0 0 0 0 rgb(63 191 106 / 0.8); }
+  30% { transform: scale(1.06); }
+  100% { transform: scale(1); box-shadow: 0 0 0 14px rgb(63 191 106 / 0); }
+}
+.scanner-panel .scan-track {
+  height: 6px;
+  margin-top: 14px;
+}
+.scanner-panel .scan-track > div {
+  background: #3fbf6a;
+  transition: width 0.3s ease-out;
+}
+.scanner-panel .scan-count {
+  font: 700 11px monospace;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin: 8px 0 0;
+}
+.scanner-panel .scan-notice.is-success {
+  color: #8dffb0;
+}
+.scanner-panel .scan-notice.is-error {
+  color: #ff8f80;
+}
+.scanner-panel .scan-notice.is-info {
+  color: #e7b45a;
+}
+.scanner-panel .ai-overlay .scanned polygon,
+.scanner-panel .marker-overlay .scanned polygon {
+  stroke: #3fbf6a;
+}
+@media (prefers-reduced-motion: reduce) {
+  .scanner-panel .scan-chip.just-scanned {
+    animation: none;
+  }
+}

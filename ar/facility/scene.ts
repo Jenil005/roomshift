@@ -21,6 +21,7 @@ export interface FacilityState {
   door: boolean;
   phase: string;
   draft: readonly string[]; // shared boot order (puzzle 2)
+  scanned?: readonly string[]; // puzzle 1 objects scanned so far (lights their stations)
   modules: readonly { id: string; label: string }[];
   holding: number; // players holding the final panel
   players: number; // connected players
@@ -314,12 +315,12 @@ export function createFacility({ quality = "high" }: { quality?: FacilityQuality
   box(0.12, 0.05, 0.05, 0, 0.3, 0, rubber, lever);
   shadow(0.7, 0.4, -0.85, -D + 0.2);
 
-  /* Object stations (left side): research BOOK, containment CUP, access KEYS. */
+  /* Object stations (left side): research BOOK, containment CUP, access KEYBOARD. */
   const stationLamps: Record<string, THREE.Mesh> = {};
   const stationDefs = [
     { id: "book", name: "RESEARCH", z: -0.75 },
     { id: "cup", name: "CONTAINMENT", z: 0.0 },
-    { id: "keys", name: "ACCESS", z: 0.75 },
+    { id: "keyboard", name: "ACCESS", z: 0.75 },
   ];
   for (const s of stationDefs) {
     const g = new THREE.Group();
@@ -445,7 +446,7 @@ export function createFacility({ quality = "high" }: { quality?: FacilityQuality
     coreLabel.set(next.breaker ? "CORE ONLINE" : "CORE OFFLINE", next.breaker ? "#a6ffcf" : "#ff7a6a");
     for (const s of stationDefs) {
       const mat = stationLamps[s.id].material as THREE.MeshStandardMaterial;
-      mat.emissive.set(next.breaker ? 0x45ff8a : 0xffa425);
+      mat.emissive.set(next.breaker || next.scanned?.includes(s.id) ? 0x45ff8a : 0xffa425);
     }
     termHeader.set(
       next.terminal ? "COMMS ONLINE" : next.breaker ? "COMMS BOOT ORDER" : "TERMINAL · NO POWER",
