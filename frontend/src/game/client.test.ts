@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { PHASE_COMPLETE_HOLD_MS, PUZZLE1_HOLD_MS } from "@shared/constants";
+import { PHASE_COMPLETE_HOLD_MS, PUZZLE1_COOLDOWN_MS } from "@shared/constants";
 import type { GameRequest } from "@shared/events";
-import { createGameClient, SESSION_KEY } from "./client";
+import { createGameClient, SCAN_RETRY_MS, SCANS_KEY, SESSION_KEY } from "./client";
 import { engineServer, type EngineServer } from "./engineServer";
 import type { Transport, TransportResult } from "./transport";
 
@@ -46,6 +46,14 @@ function setup() {
     return { client, storage };
   };
   return { server, n, make, advance: (ms: number) => (clock += ms) };
+}
+
+
+type Seat = { client: ReturnType<typeof createGameClient> };
+/** Hands one recognized object to the client's queue and waits for the reply. */
+async function scanAndSettle(seat: Seat, object: "book" | "cup" | "keyboard", confidence = 0.8) {
+  seat.client.scanObject({ object, source: "ai", confidence });
+  for (let i = 0; i < 5; i++) await flush();
 }
 
 async function lobbyOfTwo() {
@@ -140,7 +148,7 @@ describe("game client against the real engine", () => {
     expect(g.b.client.getSnapshot().lastError).toMatchObject({ code: "not_host", action: "intro:skip" });
 
     await g.a.client.send({ type: "intro:skip" });
-    const manualWrong = { roomCode: "", playerId: "", puzzle: 1 as const, physical: { source: "manual" as const, order: ["cup", "book", "keys"] } };
+    const manualWrong = { roomCode: "", playerId: "", puzzle: 1 as const, physical: { source: "manual" as const, order: ["cup", "book", "keyboard"] } };
     await g.a.client.send({ type: "puzzle:submit", submission: manualWrong });
     const outcome = g.a.client.getSnapshot().lastSubmit!;
     expect(outcome).toMatchObject({ puzzle: 1, solved: false, reason: "Wrong order" });
@@ -172,18 +180,19 @@ describe("game client against the real engine", () => {
     expect(a.client.getSnapshot().lastError?.code).toBe("room_not_found");
   });
 
-  it("plays a full mission with camera evidence, the shared boot order and a joint hold", async () => {
+  it("plays a full mission with object scans, the shared boot order and a joint hold", async () => {
     const g = await startedGame();
     const { a, b, server } = g;
     await a.client.send({ type: "intro:skip" });
     expect(a.client.getSnapshot().room!.phase).toBe("PUZZLE_1");
 
-    const marker = (id: string, x: number) => ({ id: id.toUpperCase(), center: { x, y: 0.5 } });
-    await b.client.send({
-      type: "puzzle:submit",
-      submission: { roomCode: "", playerId: "", puzzle: 1, physical: { source: "camera", heldForMs: PUZZLE1_HOLD_MS, markers: [marker("keys", 0.8), marker("book", 0.2), marker("cup", 0.5)] } },
-    });
-    expect(b.client.getSnapshot().lastSubmit?.solved).toBe(true);
+    // Two phones share the scanning: b scans BOOK and KEYBOARD, a scans CUP.
+    await b.client.send({ type: "player:heartbeat" });
+    await scanAndSettle(b, "book");
+    await scanAndSettle(a, "cup");
+    await b.client.send({ type: "player:heartbeat" }); // b learns about a's CUP
+    await scanAndSettle(b, "keyboard");
+    expect(b.client.getSnapshot().scans.last).toMatchObject({ object: "keyboard", status: "solved" });
     expect(b.client.getSnapshot().room!.systems.breaker).toBe(true);
     expect(b.client.getSnapshot().room!.puzzles[1].verifiedBy).toBe("camera");
 
@@ -228,7 +237,7 @@ describe("game client against the real engine", () => {
       const s = b.client.getSnapshot();
       if (s.room?.phase === "PUZZLE_2" && s.clue) seen.push(s.clue.clues.join(" "));
     });
-    await a.client.send({ type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 1, physical: { source: "manual", order: ["book", "cup", "keys"] } } });
+    await a.client.send({ type: "puzzle:submit", submission: { roomCode: "", playerId: "", puzzle: 1, physical: { source: "manual", order: ["book", "cup", "keyboard"] } } });
     g.advance(PHASE_COMPLETE_HOLD_MS);
     await b.client.send({ type: "player:heartbeat" }); // b sees PUZZLE_2 before its room:me returns
     expect(b.client.getSnapshot().room!.phase).toBe("PUZZLE_2");
@@ -241,17 +250,129 @@ describe("game client against the real engine", () => {
   it("never sends client-side identity or verdicts the server would trust", async () => {
     const g = await startedGame();
     await g.a.client.send({ type: "intro:skip" });
-    // Camera evidence whose claimed order is right but whose positions are wrong: rejected.
+    // A wrong report sent under another player's id: the server uses the token, judges, rejects.
     await g.a.client.send({
       type: "puzzle:submit",
       submission: {
         roomCode: "",
         playerId: g.b.client.getSnapshot().selfId!,
         puzzle: 1,
-        physical: { source: "camera", heldForMs: 5000, order: ["book", "cup", "keys"], markers: [{ id: "cup", center: { x: 0.1, y: 0.5 } }, { id: "book", center: { x: 0.5, y: 0.5 } }, { id: "keys", center: { x: 0.9, y: 0.5 } }] },
+        physical: { source: "manual", order: ["keyboard", "cup", "book"] },
       },
     });
     expect(g.a.client.getSnapshot().lastSubmit).toMatchObject({ solved: false, reason: "Wrong order" });
     expect(g.n.log.at(-1)).toMatchObject({ code: g.code, playerToken: expect.any(String) });
+  });
+});
+
+describe("puzzle 1 scan queue", () => {
+  async function atPuzzle1() {
+    const g = await startedGame();
+    await g.a.client.send({ type: "intro:skip" });
+    await g.b.client.send({ type: "player:heartbeat" }); // b's screen is on PUZZLE_1 too
+    return g;
+  }
+  const scannedOn = (seat: Seat) => seat.client.getSnapshot().room!.puzzle1!.scanned.map((s) => s.object);
+  const scanRequests = (g: { n: { log: GameRequest[] } }) => g.n.log.filter((r) => r.type === "puzzle1:scan");
+
+  it("sends each recognized object once and keeps earlier ones scanned", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book");
+    expect(scannedOn(g.b)).toEqual(["book"]);
+    // BOOK is seen again (duplicate): no new request, no new progress.
+    g.b.client.scanObject({ object: "book", source: "ai", confidence: 0.9 });
+    await flush();
+    expect(scanRequests(g)).toHaveLength(1);
+    await scanAndSettle(g.b, "cup");
+    expect(scannedOn(g.b)).toEqual(["book", "cup"]);
+    expect(g.b.client.getSnapshot().scans).toEqual({ pending: [], last: expect.objectContaining({ object: "cup", status: "accepted" }) });
+    expect(g.b.client.getSnapshot().room!.systems.breaker).toBe(false);
+  });
+
+  it("a burst of sightings of one object is a single request", async () => {
+    const g = await atPuzzle1();
+    for (let i = 0; i < 4; i++) g.b.client.scanObject({ object: "book", source: "ai", confidence: 0.8 });
+    for (let i = 0; i < 5; i++) await flush();
+    expect(scanRequests(g)).toHaveLength(1);
+  });
+
+  it("shows the server's rejection of an out-of-sequence scan and pauses for the cooldown", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book");
+    await scanAndSettle(g.b, "keyboard");
+    const snap = g.b.client.getSnapshot();
+    expect(snap.scans.last).toMatchObject({ object: "keyboard", status: "rejected", reason: "KEYBOARD scanned out of sequence" });
+    expect(snap.scans.last!.retryAt).toBe(g.advance(0) + PUZZLE1_COOLDOWN_MS);
+    expect(snap.room!.puzzle1!.scanned).toEqual([]);
+    // During the cooldown sightings are dropped locally instead of hitting the server.
+    const before = scanRequests(g).length;
+    g.b.client.scanObject({ object: "book", source: "ai", confidence: 0.8 });
+    expect(scanRequests(g)).toHaveLength(before);
+    g.advance(PUZZLE1_COOLDOWN_MS);
+    await scanAndSettle(g.b, "book");
+    expect(scannedOn(g.b)).toEqual(["book"]);
+  });
+
+  it("refuses a low-confidence scan without changing progress", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book", 0.3);
+    expect(g.b.client.getSnapshot().scans.last).toMatchObject({ object: "book", status: "error", reason: "Detection confidence too low" });
+    expect(scannedOn(g.b)).toEqual([]);
+  });
+
+  it("keeps a scan through a network drop and sends it once the connection is back", async () => {
+    const g = await atPuzzle1();
+    g.b.client.start();
+    g.n.down = true;
+    await scanAndSettle(g.b, "book");
+    expect(g.b.client.getSnapshot().scans.pending).toEqual(["book"]); // still shown as scanned (saving)
+    g.n.down = false;
+    await new Promise((r) => setTimeout(r, SCAN_RETRY_MS + 50));
+    for (let i = 0; i < 5; i++) await flush();
+    g.b.client.stop();
+    expect(g.b.client.getSnapshot().scans.pending).toEqual([]);
+    expect(scannedOn(g.b)).toEqual(["book"]);
+  });
+
+  it("a reload restores queued scans and accepted progress without duplicating them", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book");
+    g.n.down = true;
+    await scanAndSettle(g.b, "cup"); // recognized, but the reply is lost
+    expect(JSON.parse(g.b.storage.getItem(SCANS_KEY)!)).toMatchObject({ pending: [{ object: "cup" }] });
+    g.n.down = false;
+    const reloaded = g.make(g.b.storage);
+    reloaded.client.start();
+    for (let i = 0; i < 8; i++) await flush();
+    reloaded.client.stop();
+    expect(scannedOn(reloaded)).toEqual(["book", "cup"]);
+    expect(reloaded.client.getSnapshot().scans.pending).toEqual([]);
+    expect(g.server.state!.puzzle1!.scans).toHaveLength(2);
+  });
+
+  it("progress lives on the server, so a remounted scanner or another phone sees it", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book");
+    await g.a.client.send({ type: "player:heartbeat" });
+    expect(scannedOn(g.a)).toEqual(["book"]);
+    // a already has BOOK in the shared progress: its own sighting is not sent.
+    const before = scanRequests(g).length;
+    g.a.client.scanObject({ object: "book", source: "ai", confidence: 0.9 });
+    expect(scanRequests(g)).toHaveLength(before);
+  });
+
+  it("restart clears the team's progress; scans are ignored outside PUZZLE_1", async () => {
+    const g = await atPuzzle1();
+    await scanAndSettle(g.b, "book");
+    await g.b.client.restartScans();
+    expect(scannedOn(g.b)).toEqual([]);
+    expect(g.b.client.getSnapshot().room!.puzzles[1].attempts).toBe(0);
+    await scanAndSettle(g.b, "book");
+    await scanAndSettle(g.b, "cup");
+    await scanAndSettle(g.b, "keyboard");
+    expect(g.b.client.getSnapshot().room!.phase).toBe("PUZZLE_1_COMPLETE");
+    const before = scanRequests(g).length;
+    g.b.client.scanObject({ object: "book", source: "ai", confidence: 0.9 });
+    expect(scanRequests(g)).toHaveLength(before);
   });
 });
