@@ -4,6 +4,8 @@
 // Port of ar/public/ar-room.js with a typed API for the React game. The XR engine binary is
 // loaded unmodified from `engineUrl` and only its public XR8 APIs are used. While AR runs,
 // XR8 is the ONLY camera owner; stopAR() releases the camera before anything else may use it.
+// Object scanning during AR reads XR8's own camera frames (tapFrames, via the public
+// CameraPixelArray module), so it never opens a second camera.
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { reportDebug } from "../debugChannel";
@@ -40,14 +42,20 @@ export interface FacilityStatus {
 type PipelineModule = {
   name: string;
   onStart?: () => void;
-  onUpdate?: (e: { processCpuResult?: { reality?: { trackingStatus?: string; trackingReason?: string } } }) => void;
+  onUpdate?: (e: {
+    processCpuResult?: { reality?: { trackingStatus?: string; trackingReason?: string } };
+    processGpuResult?: { camerapixelarray?: Partial<CameraPixels> };
+  }) => void;
   onException?: (error: unknown) => void;
   onCameraStatusChange?: (e: { status: string; stream?: MediaStream }) => void;
 };
 interface XR8Api {
   loadChunk(name: string): Promise<void>;
   addCameraPipelineModules(modules: unknown[]): void;
+  addCameraPipelineModule?(module: unknown): void;
+  removeCameraPipelineModule?(name: string): void;
   clearCameraPipelineModules?(): void;
+  CameraPixelArray?: { pipelineModule(options: { luminance?: boolean; maxDimension?: number }): unknown };
   run(options: unknown): void;
   stop(): void;
   XrController: { configure(c: unknown): void; pipelineModule(): unknown; updateCameraProjectionMatrix(o: unknown): void };
@@ -56,6 +64,13 @@ interface XR8Api {
   XrConfig: { device(): { MOBILE: unknown }; camera(): { BACK: unknown } };
 }
 type XRWindow = typeof window & { XR8?: XR8Api; THREE?: unknown };
+
+/** One AR camera frame as RGBA pixels (XR8 CameraPixelArray output). */
+export type CameraPixels = { rows: number; cols: number; rowBytes: number; pixels: Uint8Array };
+// Frames for object scanning are scaled so the long side is this (the AI scanner uses 640 px).
+export const SCAN_FRAME_MAX_DIMENSION = 640;
+const PIXELS_MODULE = "camerapixelarray"; // XR8's own name for the CameraPixelArray module
+const TAP_MODULE = "roomshift-scan-tap";
 type PermissionAPI = { requestPermission?: () => Promise<string> };
 
 const ENGINE_TIMEOUT_MS = 30_000;
@@ -139,6 +154,8 @@ export class FacilitySession {
   private readonly direction = new THREE.Vector3();
   private readonly raycaster = new THREE.Raycaster();
   private down: { x: number; y: number } | null = null;
+  private frameTap: ((frame: CameraPixels) => void) | null = null;
+  private tapAttached = false;
 
   private readonly container: HTMLElement;
   private readonly options: { engineUrl: string; quality?: FacilityQuality };
@@ -350,7 +367,9 @@ export class FacilitySession {
           if (status === "failed") this.fail(new Error("The rear camera could not start."));
         },
       };
-      XR8.addCameraPipelineModules([XR8.GlTextureRenderer.pipelineModule(), XR8.Threejs.pipelineModule(), XR8.XrController.pipelineModule(), facilityModule]);
+      const tap = this.frameTap && this.canTapFrames ? this.tapModules(XR8) : [];
+      XR8.addCameraPipelineModules([XR8.GlTextureRenderer.pipelineModule(), XR8.Threejs.pipelineModule(), XR8.XrController.pipelineModule(), facilityModule, ...tap]);
+      this.tapAttached = tap.length > 0;
       this.hasRun = true;
       this.lastFrame = performance.now();
       this.watchdog = window.setInterval(() => {
@@ -367,6 +386,46 @@ export class FacilitySession {
       // A second XR8.run in the same page is not guaranteed; offer a reload (the seat survives it).
       this.fail(error, this.hasRun);
     }
+  }
+
+  /** True when this engine can share its camera frames with a scanner while AR runs. */
+  get canTapFrames(): boolean {
+    const XR8 = this.xr;
+    return !!XR8?.CameraPixelArray && !!XR8.addCameraPipelineModule && !!XR8.removeCameraPipelineModule;
+  }
+
+  /**
+   * Streams AR camera frames to `cb` (about the camera frame rate, long side
+   * SCAN_FRAME_MAX_DIMENSION px) while AR runs; null stops it. Uses the camera XR8 already
+   * owns: copying pixels costs one small GPU read per frame, so only tap while scanning.
+   * Survives stopAR/startAR: an active tap is re-attached when AR starts again.
+   */
+  tapFrames(cb: ((frame: CameraPixels) => void) | null) {
+    this.frameTap = cb;
+    const XR8 = this.xr;
+    // Before XR8 starts, runXr adds the tap with the other modules.
+    if (!XR8 || !this.canTapFrames || !this.running) return;
+    if (cb && !this.tapAttached) {
+      for (const m of this.tapModules(XR8)) XR8.addCameraPipelineModule!(m);
+      this.tapAttached = true;
+    } else if (!cb && this.tapAttached) {
+      XR8.removeCameraPipelineModule!(TAP_MODULE);
+      XR8.removeCameraPipelineModule!(PIXELS_MODULE);
+      this.tapAttached = false;
+    }
+  }
+
+  private tapModules(XR8: XR8Api): unknown[] {
+    const tap: PipelineModule = {
+      name: TAP_MODULE,
+      onUpdate: ({ processGpuResult }) => {
+        const p = processGpuResult?.camerapixelarray;
+        // The first frame after attaching has no pixels yet.
+        if (!p?.pixels || !p.rows || !p.cols || !p.rowBytes || !this.running) return;
+        this.frameTap?.({ rows: p.rows, cols: p.cols, rowBytes: p.rowBytes, pixels: p.pixels });
+      },
+    };
+    return [XR8.CameraPixelArray!.pipelineModule({ luminance: false, maxDimension: SCAN_FRAME_MAX_DIMENSION }), tap];
   }
 
   private onArFrame({ processCpuResult }: Parameters<NonNullable<PipelineModule["onUpdate"]>>[0]) {
@@ -450,6 +509,7 @@ export class FacilitySession {
     this.tracking = false;
     this.normalSince = null;
     clearInterval(this.watchdog);
+    this.tapAttached = false; // the next run starts from a fresh module list
     try {
       this.xr?.stop();
     } catch (error) {

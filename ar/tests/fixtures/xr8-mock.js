@@ -15,6 +15,10 @@
     powerEvents: [],
     cameraFailure: false,
     compatible: true,
+    // Camera frame handed to a CameraPixelArray module ({ rows, cols, rowBytes, pixels },
+    // RGBA, top row first). Tests set it; null means the camera sees nothing yet.
+    cameraPixels: null,
+    pixelFrames: 0,
   };
   let scene, camera, timer;
   window.__roomTest = state;
@@ -26,6 +30,11 @@
     camera.position.set(...state.cameraPosition);
     camera.lookAt(...state.cameraTarget);
     camera.updateMatrixWorld(true);
+    const pixels =
+      state.cameraPixels && state.modules.some((m) => m.name === "camerapixelarray")
+        ? state.cameraPixels
+        : null;
+    if (pixels) state.pixelFrames++;
     state.modules.forEach((module) =>
       module.onUpdate?.({
         processCpuResult: {
@@ -34,6 +43,7 @@
             trackingReason: state.reason,
           },
         },
+        processGpuResult: pixels ? { camerapixelarray: pixels } : {},
       }),
     );
   };
@@ -75,6 +85,18 @@
     },
     addCameraPipelineModules: (modules) => {
       state.modules = modules;
+    },
+    addCameraPipelineModule: (module) => {
+      state.modules = [...state.modules, module];
+    },
+    removeCameraPipelineModule: (name) => {
+      state.modules = state.modules.filter((m) => m.name !== name);
+    },
+    CameraPixelArray: {
+      pipelineModule: (options) => {
+        state.pixelOptions = options;
+        return { name: "camerapixelarray" };
+      },
     },
     clearCameraPipelineModules: () => {
       state.modules = [];
