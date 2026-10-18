@@ -1,6 +1,20 @@
 # RoomShift AR module
 
-The phone-camera side of RoomShift: the physical object puzzle (puzzle 1) and the shared 3D control room for Blackout Protocol. The puzzle uses on-device AI object detection for the book and the cup, and printed QR tags for the keys and as a full backup. It does not do world-anchored 3D tracking.
+The phone-camera side of RoomShift: the physical object puzzle (puzzle 1) and the shared 3D control room for Blackout Protocol. The puzzle uses on-device AI object detection for the book and the cup, and printed QR tags for the keys and as a full backup. `facility/` adds the world-tracked facility the game uses (Niantic XR Engine + Three.js).
+
+## In the RoomShift game
+
+The game (`frontend/`) uses this module as follows. Sections further down describe the module itself and the AR team's standalone demos.
+
+| Game feature | Module code | Notes |
+|---|---|---|
+| Puzzle 1 scanner | `PhysicalPuzzle` with `serverJudged` | The server judges every result, including manual reports. AI, QR backup and manual modes as described below |
+| Detector | `detect/selectDetector.ts` → `cocoSsdDetector.ts` (default) or `mediapipeDetector.ts` | `?detector=coco|mediapipe|auto`. MediaPipe Tasks Vision 1.0.1 with EfficientDet-Lite0 float16; thresholds book 0.35, cup 0.4. Both models see `book` and `cup` only: **KEYS always needs its QR tag** |
+| World-tracked facility | `facility/session.ts`, `facility/scene.ts`, `facility/placement.ts` | Typed port of `public/ar-room.js`, `facility.js`, `room-placement.js` (same placement tests). Facility lights, terminal and door follow the server's `room.systems`; taps on the 3D terminal send real `puzzle2:draft` requests |
+| One camera owner | `FacilitySession.stopAR()` before the scanner mounts | The scanner and the XR Engine never hold the camera at the same time |
+| Tester diagnostics | `debugChannel.ts` | Camera owner, detector and inference time, tracking status; shown by the game's `?debug` overlay |
+
+The `room/RoomScene.ts` shared room and `sync/` classes are used only by the standalone demo (`demo/`), not by the game. Desktop verification is in `docs/INTEGRATION_TEST_RESULTS.md`; nothing here is iPhone-verified yet (`docs/IPHONE_FINAL_ACCEPTANCE.md`).
 
 ## How the AR room and scanning work
 
@@ -58,7 +72,7 @@ The QR scanner's own tuning is unchanged (500 ms gap, 0.035 drift, 0.16 row, 1 f
 
 **Failures.** No WebGL: "unsupported". Model download failure: "model-failed", with **Switch to QR backup** and **Retry AI**. Loading for more than 15 s (`MODEL_LOAD_TIMEOUT_MS`): **Switch to QR backup** appears while loading continues in the background. Camera errors use the same messages as the QR scanner.
 
-**Swapping the detector.** Any detector implementing `ObjectDetector` (`detect/ObjectDetector.ts`: `name`, `classMap`, `detect(canvas)`) can be passed to `PhysicalPuzzle` as `loadDetector`. A MediaPipe Object Detector with a custom model trained on keys would declare `keys` in its `classMap`; KEYS would then stop needing a QR tag automatically (`qrOnlyIds`). No such model exists yet.
+**Swapping the detector.** Any detector implementing `ObjectDetector` (`detect/ObjectDetector.ts`: `name`, `classMap`, `detect(canvas)`) can be passed to `PhysicalPuzzle` as `loadDetector`. A MediaPipe Object Detector with a custom model trained on keys would declare `keys` in its `classMap`; KEYS would then stop needing a QR tag automatically (`qrOnlyIds`). `detect/mediapipeDetector.ts` is a MediaPipe adapter with the stock EfficientDet-Lite0 model, which has no keys class either; no keys model exists yet.
 
 **iPhone / PWA notes.** Inference is frontend-only (TF.js WebGL backend), with no native ARKit. The video element is `muted` and `playsinline`; the camera starts only after a tap; the session stops all tracks when the page is hidden (`visibilitychange`), on mode switch, on Stop camera and on unmount, and scanning needs an explicit restart after the page was hidden. `PhysicalPuzzle` calls `onScanningChange(true)` while a camera scan is live so the host can call `RoomScene.stop()` and resume with `start()` afterwards. The first load downloads about 18 MB of model weights, so use Wi-Fi; the browser caches them afterwards (the app has no service worker, so offline use is not guaranteed). Not yet run on an iPhone.
 

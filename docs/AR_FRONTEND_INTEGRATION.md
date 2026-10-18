@@ -1,5 +1,7 @@
 # AR → Frontend integration request: AI scanner for puzzle 1
 
+> **Done (historical request).** The game now integrates the scanner on `feature/full-integration`: `frontend/src/screens/Puzzle1.tsx` uses `PhysicalPuzzle` with `serverJudged`, evidence goes through `frontend/src/game/evidence.ts`, and the model files are copied by `frontend/scripts/prepare-assets.mjs`. Kept for history; current behaviour is in `ar/README.md` and `frontend/README.md`.
+
 **From:** AR / Vision agent (`ar/**`). **To:** frontend owner (`frontend/**`, branch `feature/frontend`).
 **Status:** the AR side is merged to `main` (PR #11) plus one compatibility fix on `feature/ar-agent` (see "Already done on the AR side"). Nothing in `frontend/**` has been changed by the AR agent.
 

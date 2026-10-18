@@ -1,6 +1,8 @@
 # RoomShift Game API (for frontend and AR)
 
-Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/events`; client helpers in `backend/src/game/client.ts`. The server decides every outcome; clients send requests and render state.
+Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/events`. The game players use is `frontend/` (Netlify), a different origin: its client is `frontend/src/game/client.ts` over `transport.ts`. Pages served by the backend itself can use the helpers in `backend/src/game/client.ts`. The server decides every outcome; clients send requests and render state.
+
+CORS is open on `/api/*` (`Access-Control-Allow-Origin: *`, preflight allows `POST` and `content-type`). There are no cookies: identity is the `playerToken` in the request body, so no secret ever ships in the client.
 
 ## 1. Requests
 
@@ -13,9 +15,9 @@ Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/e
 ## 2. Live state
 
 1. React pages under `src/pages/(app)/`: `useRoomView(code)` returns the public `Room`, pushed live. Works signed out.
-2. Plain pages (the AR room): `GET /api/game/room/:code` returns `{ ok, data: { room } }`. Poll about once per second.
-3. `room.systems` = `{ breaker, terminal, door }` drives the AR room's lights. `room.phase` drives screens. `room.events` (with `seq`) drives toasts and sounds.
-4. Private clues are never in `room`. Fetch with `room:me` after the phase leaves READY and after a reload.
+2. Other origins (the Netlify game, plain pages): `GET /api/game/room/:code` returns `{ ok, data: { room } }` with `Cache-Control: no-store`, or HTTP 404 `room_not_found`. The game polls every 1 s (500 ms in PUZZLE_2) and keeps only snapshots whose `room.version` is newer than the last one.
+3. `room.systems` = `{ breaker, terminal, door }` drives the AR facility (breaker lights, terminal screen, exit door). `room.phase` drives screens. `room.events` (with `seq`) drives toasts and sounds.
+4. Private clues are never in `room`. Fetch with `room:me` after the phase leaves READY, when entering INTRO and PUZZLE_2 (new clues are dealt then), and after a reload. Do not show the previous phase's clue while the new one loads.
 
 ## 3. Puzzle 1: physical order (BOOK, CUP, KEYS left to right)
 
@@ -31,10 +33,10 @@ Live at `https://roomshift.app.space`. Types are in `shared/types` and `shared/e
 
 ## 4. Puzzle 2 and finale
 
-1. `puzzle2:draft { order }` updates the shared draft (`room.puzzle2.draft`). `puzzle:submit { puzzle: 2, order }` submits; wrong answers set `retryAfterMs` (3 s, 6 s, 10 s). Hints appear in `room.puzzle2.hints`.
+1. `puzzle2:draft { order }` replaces the shared draft (`room.puzzle2.draft`). It is last-writer-wins: fetch the room right before editing (the game does) and expect a rare lost edit when two phones tap within one round trip. `puzzle:submit { puzzle: 2, order }` submits; wrong answers set `retryAfterMs` (3 s, 6 s, 10 s). Hints appear in `room.puzzle2.hints`.
 2. `final:press { held: true | false }` on press and release. The door opens when every connected player holds. `room.final.holding` lists who is holding. After `room.final.forceAvailableAt` the host may send `final:force`.
 3. Host-only: `game:start`, `intro:skip`, `final:force`, `game:reset` (back to LOBBY for a replay).
 
 ## 5. Testing
 
-`node backend/tests/sim/playthrough.mjs [url]` plays a full game with simulated players, including AR-shaped evidence.
+`node backend/tests/sim/playthrough.mjs [url]` plays a full game with simulated players, including AR-shaped evidence (47 checks). Run it against a local server (`npx deepspace dev start --port 5199`); running it against production creates real rooms, so only do that with approval. The frontend's `tests/live-backend.test.ts` and `e2e/multiplayer.spec.ts` play the same mission through the real web client.

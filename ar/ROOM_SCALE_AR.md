@@ -1,5 +1,7 @@
 ﻿# iPhone Safari room-scale AR prototype (Issue #6)
 
+> **Integration note (feature/full-integration):** the game now runs this facility inside the PWA through the typed port in `ar/facility/` (see `ar/README.md`, "In the RoomShift game"). `/ar-room.html` is no longer published by Netlify; it still builds at the repository root for the AR team. The device-validation status below is unchanged.
+
 **Physical iPhone validation: NOT PERFORMED.** This branch implements a candidate
 pipeline, not a claim of working or production-ready iPhone AR. The acceptance
 criteria requiring a real camera, metric scale, drift, and device performance
