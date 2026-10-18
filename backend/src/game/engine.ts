@@ -15,7 +15,6 @@ import {
   FINAL_FORCE_AFTER_MS,
   FINAL_SYNC_WINDOW_MS,
   HOST_HANDOFF_AFTER_MS,
-  INTRO_DURATION_MS,
   LOBBY_DROP_AFTER_MS,
   MAX_PLAYERS,
   MIN_PLAYERS,
@@ -91,6 +90,8 @@ export interface GameState {
   missionId: string
   createdAt: number
   phaseStartedAt: number
+  // Set when the host proceeds from INTRO. Optional: rooms stored before the countdown existed have none.
+  missionStartedAt?: number | null
   lastActivity: number
   version: number
   seq: number
@@ -139,7 +140,7 @@ export type EngineCommand =
   | ({ type: 'puzzle2:draft'; order: string[] } & Authed)
   | ({ type: 'final:press'; held: boolean } & Authed)
   | ({ type: 'final:force' } & Authed)
-  | { type: 'tick' } // timers: presence, auto-advance, idle cleanup
+  | { type: 'tick' } // timers: presence, host handoff, complete-hold advance, idle cleanup
   | { type: 'room:view' } // unauthenticated read of the public view (GET /api/game/room/:code)
   | { type: 'narration:set'; phase: GamePhase; text: string } // internal only: Gemini result
 
@@ -187,6 +188,7 @@ export function toView(state: GameState): Room {
     hostId: state.hostId,
     missionId: state.missionId,
     phaseStartedAt: state.phaseStartedAt,
+    ...(state.missionStartedAt ? { missionStartedAt: state.missionStartedAt } : {}),
     systems: state.systems,
     puzzles: state.puzzles,
     version: state.version,
@@ -327,7 +329,6 @@ function applyTimers(state: GameState, ctx: EngineContext): GameState | null {
   }
   handOffHostIfGone(state, now)
   const elapsed = now - state.phaseStartedAt
-  if (state.phase === 'INTRO' && elapsed >= INTRO_DURATION_MS) setPhase(state, 'PUZZLE_1', now)
   if (state.phase === 'PUZZLE_1_COMPLETE' && elapsed >= PHASE_COMPLETE_HOLD_MS) enterPuzzle2(state, ctx)
   if (state.phase === 'PUZZLE_2_COMPLETE' && elapsed >= PHASE_COMPLETE_HOLD_MS) enterFinal(state, now)
   // A player who drops mid-hold stops counting, so the others may already be enough.
@@ -343,7 +344,6 @@ export function nextDeadline(state: GameState | null): number | null {
     if (p.connected) times.push(p.lastSeen + DISCONNECT_AFTER_MS + 1)
     else if (inLobby(state)) times.push(p.lastSeen + LOBBY_DROP_AFTER_MS + 1)
   }
-  if (state.phase === 'INTRO') times.push(state.phaseStartedAt + INTRO_DURATION_MS)
   const host = state.players.find((p) => p.id === state.hostId)
   if (host && !host.connected && state.players.some((p) => p.connected)) {
     times.push(host.lastSeen + HOST_HANDOFF_AFTER_MS + 1)
@@ -534,6 +534,7 @@ function apply(
       state.puzzle1 = null
       state.puzzle2 = null
       state.final = null
+      state.missionStartedAt = null
       setPhase(state, 'LOBBY', now)
       recomputeLobby(state, now)
       state.narration = FALLBACK_NARRATION[state.phase]
@@ -541,9 +542,11 @@ function apply(
       return { state, result: ok(room()) }
     }
 
+    // "Proceed" on role reveal: the only way out of INTRO. Starts the mission countdown.
     case 'intro:skip': {
-      if (!isHost) return { state, result: fail('not_host', 'Only the host can skip the intro') }
-      if (state.phase !== 'INTRO') return { state, result: fail('wrong_phase', 'The intro is not playing') }
+      if (!isHost) return { state, result: fail('not_host', 'Only the host can proceed') }
+      if (state.phase !== 'INTRO') return { state, result: fail('wrong_phase', 'The role reveal is over') }
+      state.missionStartedAt = now
       setPhase(state, 'PUZZLE_1', now)
       return { state, result: ok(room()) }
     }

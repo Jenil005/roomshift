@@ -1,16 +1,13 @@
-import { INTRO_DURATION_MS } from "@shared/constants";
 import { NARRATION, ROLE_DESCRIPTION, ROLE_TITLE, narrationFor } from "../game/content";
 import { useGame, useMe } from "../game/useGame";
 import { Button, Label, Screen } from "../ui/kit";
 import { ServerError } from "../ui/ServerError";
-import { useSecondsUntil } from "../ui/time";
 import { FacilityButton } from "../ui/FacilityButton";
 
-/** INTRO: the server deals roles and puzzle 1 clues, then auto-advances (the host may skip). */
+/** INTRO: the server deals roles and puzzle 1 clues, then waits for the host to proceed (no timer). */
 export function RoleReveal() {
-  const { room, clue, send, serverTimeOffset } = useGame();
+  const { room, clue, send, pending } = useGame();
   const me = useMe();
-  const seconds = useSecondsUntil(room ? room.phaseStartedAt + INTRO_DURATION_MS - serverTimeOffset : null);
   if (!room) return null;
 
   return (
@@ -37,9 +34,12 @@ export function RoleReveal() {
         <p className="m-0 text-emergency" role="status">Receiving your private briefing…</p>
       )}
       <div className="flex-1" />
-      <p className="m-0 text-center text-emergency" role="timer">{seconds > 0 ? `Mission starts in ${seconds}s` : "Mission starting…"}</p>
       <ServerError actions={["intro:skip"]} />
-      {me?.isHost && <Button onClick={() => void send({ type: "intro:skip" })}>Begin now</Button>}
+      {me?.isHost ? (
+        <Button disabled={pending === "intro:skip"} onClick={() => void send({ type: "intro:skip" })}>Proceed</Button>
+      ) : (
+        <p className="m-0 text-center text-emergency" role="status">Waiting for host to proceed...</p>
+      )}
     </Screen>
   );
 }

@@ -52,7 +52,7 @@ async function twoPlayersInPuzzle1(browser: Browser) {
   await b.getByRole("button", { name: "Ready up" }).click();
   await a.getByRole("button", { name: "Ready up" }).click();
   await a.getByRole("button", { name: "Start mission" }).click();
-  await a.getByRole("button", { name: "Begin now" }).click();
+  await a.getByRole("button", { name: "Proceed" }).click();
   await expect(b.getByText("Puzzle 1 of 3")).toBeVisible();
   return { a, b, close: async () => (await ctxA.close(), await ctxB.close()) };
 }
