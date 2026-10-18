@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:live": "vite --host --mode live",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
@@ -12,6 +13,7 @@
     "test:e2e": "playwright test",
     "prepare:assets": "node scripts/prepare-assets.mjs",
     "predev": "npm run prepare:assets",
+    "predev:live": "npm run prepare:assets",
     "prebuild": "npm run prepare:assets",
     "verify:dist": "node scripts/verify-dist.mjs"
   },
