@@ -13,7 +13,7 @@ test("manual fallback validates the puzzle, labels the result, and resets", asyn
     .selectOption("book");
   await page
     .getByRole("combobox", { name: "Right", exact: true })
-    .selectOption("keys");
+    .selectOption("keyboard");
   await page.getByRole("button", { name: "Check arrangement" }).click();
   await expect(page.getByRole("status")).toContainText("does not match");
   await page
@@ -82,7 +82,7 @@ async function mockCamera(page: Page) {
     };
     state.cameraCalls = 0;
     state.cameraTracks = [];
-    state.markerOrder = ["cup", "book", "keys"];
+    state.markerOrder = ["cup", "book", "keyboard"];
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         state.cameraCalls += 1;
@@ -91,7 +91,7 @@ async function mockCamera(page: Page) {
         canvas.height = 540;
         const context = canvas.getContext("2d")!;
         const images: Record<string, HTMLImageElement> = {};
-        for (const id of ["book", "cup", "keys"]) {
+        for (const id of ["book", "cup", "keyboard"]) {
           const image = new Image();
           image.src = `/markers/${id}.svg`;
           await image.decode();
@@ -146,7 +146,7 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
     ),
   ).toBeGreaterThan(0);
   const sequence = page.getByLabel("Scan order");
-  for (const label of ["BOOK", "CUP", "KEYS"])
+  for (const label of ["BOOK", "CUP", "KEYBOARD"])
     await expect(sequence).toContainText(label);
   expect((await sequence.textContent())!.match(/BOOK/g)).toHaveLength(1);
   await page.screenshot({
@@ -160,7 +160,7 @@ test("camera decodes a live video frame, rejects wrong order, and verifies the c
     (window as typeof window & { markerOrder: string[] }).markerOrder = [
       "book",
       "cup",
-      "keys",
+      "keyboard",
     ];
   });
   await expect(

@@ -9,7 +9,7 @@ const fixture = (name: string) => fileURLToPath(new URL(`../../ar/tests/fixtures
 
 /**
  * Fake rear camera (same as ar/tests/browser/ai.spec.ts): crops of two real CC0 photos, a book
- * on the left and a mug in the middle, and the printed KEYS QR tag on the right. The real
+ * on the left and a mug in the middle, and the printed KEYBOARD QR tag on the right. The real
  * self-hosted COCO-SSD model and QR decoder run on these frames.
  */
 async function fakeCamera(context: BrowserContext) {
@@ -29,7 +29,7 @@ async function fakeCamera(context: BrowserContext) {
           await image.decode();
           return image;
         };
-        const [book, mug, keys] = await Promise.all([load("/__fixtures/book.jpg"), load("/__fixtures/mug.jpg"), load("/markers/keys.svg")]);
+        const [book, mug, keyboard] = await Promise.all([load("/__fixtures/book.jpg"), load("/__fixtures/mug.jpg"), load("/markers/keyboard.svg")]);
         const draw = () => {
           ctx.fillStyle = "#6f5a46";
           ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -37,7 +37,7 @@ async function fakeCamera(context: BrowserContext) {
           ctx.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
           ctx.fillStyle = "#ffffff";
           ctx.fillRect(890, 110, 260, 260);
-          ctx.drawImage(keys, 900, 120, 240, 240);
+          ctx.drawImage(keyboard, 900, 120, 240, 240);
         };
         draw();
         const stream = canvas.captureStream(10);
@@ -120,11 +120,11 @@ test("two browsers play a full live mission: private clues, rejoin, camera evide
   const slots = b.locator(".manual-slots select");
   await slots.nth(0).selectOption("cup");
   await slots.nth(1).selectOption("book");
-  await slots.nth(2).selectOption("keys");
+  await slots.nth(2).selectOption("keyboard");
   await b.getByRole("button", { name: /Check arrangement/ }).click();
   await expect(b.getByRole("alert").filter({ hasText: "Wrong order" })).toBeVisible();
 
-  // A scans the real arrangement: COCO-SSD sees book + cup, the QR tag gives keys.
+  // A scans the real arrangement: COCO-SSD sees book + cup, the QR tag gives keyboard.
   await expect(a.getByRole("button", { name: /Start AI camera/ })).toBeVisible({ timeout: 60_000 });
   await a.getByRole("button", { name: /Start AI camera/ }).click();
   await expect(a.getByText("Verified from camera evidence")).toBeVisible({ timeout: 60_000 });

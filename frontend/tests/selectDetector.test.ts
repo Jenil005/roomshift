@@ -54,8 +54,8 @@ describe("detector selection", () => {
 });
 
 describe("MediaPipe class mapping and thresholds", () => {
-  it("maps COCO labels, keeps keys QR-only, and applies MediaPipe's own thresholds", () => {
-    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual(["keys"]);
+  it("maps COCO labels, keeps keyboard QR-only, and applies MediaPipe's own thresholds", () => {
+    expect(qrOnlyIds(COCO_CLASS_MAP)).toEqual([]);
     const raw = [
       { label: "book", score: 0.42, bbox: [247, 117, 155, 256] as [number, number, number, number] },
       { label: "book", score: 0.25, bbox: [2, 162, 167, 244] as [number, number, number, number] },

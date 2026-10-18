@@ -11,7 +11,7 @@ import {
 const MARKER_THEME: Record<MarkerId, string> = {
   book: "KNOWLEDGE",
   cup: "CONTAINMENT",
-  keys: "ACCESS",
+  keyboard: "ACCESS",
 };
 
 const clues = [
@@ -25,7 +25,7 @@ const clues = [
     role: "THE OPERATOR",
     number: "02",
     clue: "Access comes last.",
-    detail: "The keys belong at the end of the row.",
+    detail: "The keyboard belong at the end of the row.",
   },
   {
     role: "THE ENGINEER",
@@ -140,7 +140,7 @@ function Mission({ onReset }: { onReset: () => void }) {
                 <h3>Make the physical connection.</h3>
                 <p>
                   Print the cards, place them on a book, a cup, and a set of
-                  keys, then arrange the objects in one row.
+                  keyboard, then arrange the objects in one row.
                 </p>
               </div>
               <a

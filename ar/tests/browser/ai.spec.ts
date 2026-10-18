@@ -11,20 +11,20 @@ test.use({
 type CameraWindow = typeof window & {
   cameraCalls: number;
   cameraTracks: MediaStreamTrack[];
-  showKeys: boolean;
+  showKeyboard: boolean;
 };
 
 /**
  * Fake rear camera: crops of two real CC0 photos (a book on the left, a mug in the middle;
- * see ar/tests/fixtures/README.md) with the printed KEYS QR tag on the right when
- * `window.showKeys` is true. The real self-hosted COCO-SSD model runs on these frames.
+ * see ar/tests/fixtures/README.md) with the printed KEYBOARD QR tag on the right when
+ * `window.showKeyboard` is true. The real self-hosted COCO-SSD model runs on these frames.
  */
 async function mockPhotoCamera(page: Page) {
   await page.addInitScript(() => {
     const state = window as CameraWindow;
     state.cameraCalls = 0;
     state.cameraTracks = [];
-    state.showKeys = false;
+    state.showKeyboard = false;
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         state.cameraCalls += 1;
@@ -38,20 +38,20 @@ async function mockPhotoCamera(page: Page) {
           await image.decode();
           return image;
         };
-        const [book, mug, keys] = await Promise.all([
+        const [book, mug, keyboard] = await Promise.all([
           load("/ar/tests/fixtures/book.jpg"),
           load("/ar/tests/fixtures/mug.jpg"),
-          load("/markers/keys.svg"),
+          load("/markers/keyboard.svg"),
         ]);
         const draw = () => {
           context.fillStyle = "#6f5a46";
           context.fillRect(0, 0, canvas.width, canvas.height);
           context.drawImage(book, 330, 160, 300, 420, 67, 40, 286, 400);
           context.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
-          if (state.showKeys) {
+          if (state.showKeyboard) {
             context.fillStyle = "#ffffff";
             context.fillRect(890, 110, 260, 260);
-            context.drawImage(keys, 900, 120, 240, 240);
+            context.drawImage(keyboard, 900, 120, 240, 240);
           }
         };
         draw();
@@ -92,7 +92,7 @@ test("AI scanner is the default and does not open the camera before a tap", asyn
   expect(await page.evaluate(() => (window as CameraWindow).cameraCalls)).toBe(0);
 });
 
-test("real COCO-SSD finds the book and mug, KEYS needs its QR tag, then the hybrid arrangement verifies", async ({
+test("real COCO-SSD finds the book and mug, KEYBOARD needs its QR tag, then the hybrid arrangement verifies", async ({
   page,
 }) => {
   test.setTimeout(150_000);
@@ -107,7 +107,7 @@ test("real COCO-SSD finds the book and mug, KEYS needs its QR tag, then the hybr
     timeout: 60_000,
   });
   await expect(chips.getByLabel("CUP: detected by AI")).toBeVisible();
-  await expect(chips.getByLabel("KEYS: needs QR tag")).toBeVisible();
+  await expect(chips.getByLabel("KEYBOARD: needs QR tag")).toBeVisible();
   await expect(page.locator(".ai-overlay g.ai")).not.toHaveCount(0);
   // Labels carry the model's confidence, e.g. "BOOK 87%".
   await expect(page.locator(".ai-overlay g.ai text").first()).toHaveText(
@@ -115,16 +115,16 @@ test("real COCO-SSD finds the book and mug, KEYS needs its QR tag, then the hybr
   );
   await page.screenshot({ path: "test-results/ai-book-cup.png", fullPage: true });
 
-  // AI alone never completes the puzzle: book and cup are seen, keys are not.
+  // AI alone never completes the puzzle: book and cup are seen, keyboard are not.
   await page.waitForTimeout(3000);
   await expect(
     page.getByRole("heading", { name: "Connection restored." }),
   ).toHaveCount(0);
 
   await page.evaluate(() => {
-    (window as CameraWindow).showKeys = true;
+    (window as CameraWindow).showKeyboard = true;
   });
-  await expect(chips.getByLabel("KEYS: detected by QR tag")).toBeVisible({
+  await expect(chips.getByLabel("KEYBOARD: detected by QR tag")).toBeVisible({
     timeout: 30_000,
   });
   await expect(
@@ -133,7 +133,7 @@ test("real COCO-SSD finds the book and mug, KEYS needs its QR tag, then the hybr
   const evidence = page.getByLabel("Evidence");
   await expect(evidence).toContainText("BOOK · AI");
   await expect(evidence).toContainText("CUP · AI");
-  await expect(evidence).toContainText("KEYS · QR");
+  await expect(evidence).toContainText("KEYBOARD · QR");
   await expect.poll(() => tracksEnded(page)).toBe(true);
 });
 

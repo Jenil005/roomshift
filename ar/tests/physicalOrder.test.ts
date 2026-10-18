@@ -19,13 +19,13 @@ function marker(id: MarkerId, x: number, y = 0.5): DetectedMarker {
     ],
   };
 }
-const correct = [marker("book", 0.2), marker("cup", 0.5), marker("keys", 0.8)];
+const correct = [marker("book", 0.2), marker("cup", 0.5), marker("keyboard", 0.8)];
 
 describe("physical order verification", () => {
   it("uses spatial position rather than detector discovery order", () => {
     expect(evaluateOrder([correct[2], correct[0], correct[1]])).toEqual({
       status: "holding",
-      order: ["book", "cup", "keys"],
+      order: ["book", "cup", "keyboard"],
     });
   });
   it("rejects missing cards, duplicates, wrong orders, and ambiguous layouts", () => {
@@ -37,7 +37,7 @@ describe("physical order verification", () => {
       evaluateOrder([
         marker("cup", 0.2),
         marker("book", 0.5),
-        marker("keys", 0.8),
+        marker("keyboard", 0.8),
       ]).status,
     ).toBe("wrong-order");
     expect(
@@ -115,8 +115,8 @@ describe("physical order verification", () => {
     expect(JSON.parse(JSON.stringify(result))).toMatchObject({
       solved: true,
       markers: correct,
-      detectedIds: ["book", "cup", "keys"],
-      order: ["book", "cup", "keys"],
+      detectedIds: ["book", "cup", "keyboard"],
+      order: ["book", "cup", "keyboard"],
       heldForMs: 1200,
     });
   });
