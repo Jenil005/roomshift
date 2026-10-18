@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { MODULE_LABEL, type ModuleId } from "@shared/puzzles/commsBoot";
 import type { Room } from "@shared/types";
 import { facilityStateFrom } from "./state";
+import { useArScan } from "./useArScan";
 import { FacilitySession, type FacilityStatus } from "../../../ar/facility/session";
 import type { FacilityQuality, Hotspot } from "../../../ar/facility/scene";
 import { MARKER_IDS, MARKER_LABEL } from "../../../ar/types";
@@ -16,7 +17,7 @@ const HEIGHT_KEY = "roomshift.cameraHeight";
 
 const PHASE_TASK: Partial<Record<Room["phase"], string>> = {
   INTRO: "Briefing in progress. Explore the facility while you wait.",
-  PUZZLE_1: "Tap an object pedestal or SCAN OBJECTS. Scan the book, cup and keyboard one at a time.",
+  PUZZLE_1: "Scan the book, cup and keyboard one at a time. In AR, tap SCAN IN AR and point at one object.",
   PUZZLE_1_COMPLETE: "Breaker engaged. Emergency power flowing.",
   PUZZLE_2: "Comms terminal: tap its panels to build the shared boot order.",
   PUZZLE_2_COMPLETE: "Comms online. The blast door controller is waking.",
@@ -55,6 +56,17 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
   const { holding, handlers } = useFinalHold();
   const p1 = usePuzzle1Scans();
   const lastSeq = useRef<number | null>(null);
+  // Object scanning on the AR camera feed, without leaving AR (FacilitySession.tapFrames).
+  const [arScan, setArScan] = useState(false);
+  const ar = status?.ar ?? false;
+  const scan = useArScan(session, arScan && room?.phase === "PUZZLE_1", ar, p1.host);
+  const debugThumb = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = debugThumb.current;
+    if (!box || !scan.debugCanvas) return;
+    box.appendChild(scan.debugCanvas);
+    return () => scan.debugCanvas?.remove();
+  }, [scan.debugCanvas]);
 
   useEffect(() => {
     const s = new FacilitySession(host.current!, { engineUrl: ENGINE_URL, quality });
@@ -95,19 +107,24 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
 
   // 3D taps become requests; the server decides what happens.
   const phase = room?.phase;
+  const canScanInAr = ar && scan.supported;
   useEffect(() => {
     if (!session) return;
     return session.onHotspot((h: Hotspot) => {
       if (h.kind === "module" && phase === "PUZZLE_2" && h.id) void toggle(h.id as ModuleId);
-      if (h.kind === "station" && phase === "PUZZLE_1" && onScan) {
-        session.stopAR();
-        onScan();
+      if (h.kind === "station" && phase === "PUZZLE_1") {
+        // In AR a pedestal starts scanning right here; otherwise it opens the full scanner.
+        if (canScanInAr) setArScan(true);
+        else if (onScan) {
+          session.stopAR();
+          onScan();
+        }
       }
     });
-  }, [session, phase, toggle, onScan]);
+  }, [session, phase, toggle, onScan, canScanInAr]);
 
   if (!room) return null;
-  const ar = status?.ar ?? false;
+  const debug = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
   const calibrate = () => {
     const value = Number(height);
     const ok = session?.calibrate(value) ?? false;
@@ -144,6 +161,8 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
 
         <div className="flex-1" />
 
+        {scan.live && <div className="facility-scan-reticle" aria-hidden="true" />}
+
         {(room.phase === "PUZZLE_1" || room.phase === "PUZZLE_1_COMPLETE") && (
           <section className="facility-card" aria-label="Object scan progress">
             <div className="text-label">Object scans (shared with your team)</div>
@@ -151,7 +170,7 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
               {MARKER_IDS.map((id) => {
                 const done = p1.scanned.includes(id);
                 return (
-                  <li key={id} className={done ? "on" : ""}>
+                  <li key={id} className={`${done ? "on" : ""} ${scan.justScanned === id ? "just-scanned" : ""}`} aria-label={`${MARKER_LABEL[id]}: ${done ? "scanned" : "not scanned"}`}>
                     {done ? "✓" : "○"} {MARKER_LABEL[id]} {done ? "SCANNED" : "NOT SCANNED"}
                   </li>
                 );
@@ -160,7 +179,30 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
             <div className={p1.solved ? "mt-1 text-phosphor" : "mt-1"}>
               {p1.solved ? "BREAKER RESTORED — PUZZLE COMPLETE" : `PROGRESS ${p1.scanned.length}/${MARKER_IDS.length}`}
             </div>
-            {p1.host.notice?.tone === "error" && <p className="m-0 text-emergency" role="alert">{p1.host.notice.text}</p>}
+            {arScan && room.phase === "PUZZLE_1" ? (
+              <>
+                <p className={`m-0 facility-scan-notice is-${scan.notice?.tone ?? "idle"}`} aria-live="polite">
+                  {scan.notice?.text ??
+                    (!ar
+                      ? "Start AR to scan here, or use SCAN OBJECTS."
+                      : scan.model === "loading" || scan.model === "slow"
+                        ? "Loading the object model (first time only)…"
+                        : scan.model === "failed"
+                          ? "The AI model could not load. Use SCAN OBJECTS for QR backup or a manual report."
+                          : p1.host.paused
+                            ? "Breaker resetting…"
+                            : "Point the phone at ONE object.")}
+                </p>
+                {scan.live && <div className="text-[12px] text-label">SEEING: {scan.seeing.length ? scan.seeing.join(" · ") : "nothing yet"}</div>}
+                {scan.model === "failed" && <button type="button" onClick={scan.retryModel}>RETRY AI</button>}
+              </>
+            ) : (
+              p1.host.notice?.tone === "error" && <p className="m-0 text-emergency" role="alert">{p1.host.notice.text}</p>
+            )}
+            {room.phase === "PUZZLE_1" && p1.scanned.length > 0 && p1.host.onRestart && (
+              <button type="button" className="facility-text-button" onClick={p1.host.onRestart}>RESTART SCANNING</button>
+            )}
+            {debug && <div ref={debugThumb} className="facility-scan-debug" aria-hidden="true" />}
           </section>
         )}
 
@@ -207,8 +249,15 @@ export default function FacilityView({ onClose, onScan }: { onClose: () => void;
         </div>
 
         <div className="facility-controls">
+          {room.phase === "PUZZLE_1" && canScanInAr && (
+            <button type="button" className="primary" aria-pressed={arScan} onClick={() => setArScan((v) => !v)}>
+              {arScan ? "STOP SCANNING" : `SCAN IN AR ${p1.scanned.length}/${MARKER_IDS.length}`}
+            </button>
+          )}
           {room.phase === "PUZZLE_1" && onScan && (
-            <button type="button" className="primary" onClick={toScanner}>SCAN OBJECTS {p1.scanned.length}/{MARKER_IDS.length}{ar ? " (ends AR)" : ""}</button>
+            <button type="button" className={canScanInAr ? "" : "primary"} onClick={toScanner}>
+              {canScanInAr ? "FULL SCANNER (ends AR)" : `SCAN OBJECTS ${p1.scanned.length}/${MARKER_IDS.length}`}
+            </button>
           )}
           {room.phase === "FINAL_SEQUENCE" && (
             <button type="button" {...handlers} aria-pressed={holding} className={`facility-hold ${holding ? "is-holding" : ""}`}>

@@ -5,10 +5,18 @@ import { fileURLToPath } from "node:url";
 // XR8 here is the AR team's CONTRACT TEST DOUBLE (ar/tests/fixtures/xr8-mock.js): it proves the
 // pipeline wiring, permissions flow, placement math and camera hand-off, NOT real SLAM/tracking.
 const xr8Mock = readFileSync(fileURLToPath(new URL("../../ar/tests/fixtures/xr8-mock.js", import.meta.url)), "utf8");
+const fixture = (name: string) => fileURLToPath(new URL(`../../ar/tests/fixtures/${name}`, import.meta.url));
 
 test.use({ launchOptions: { args: ["--enable-unsafe-swiftshader", "--use-angle=swiftshader"] } });
 
-type MockState = { stops: number; tracksStopped: number; modules: unknown[] };
+type MockState = {
+  stops: number;
+  tracksStopped: number;
+  modules: { name: string }[];
+  pixelFrames: number;
+  pixelOptions?: { maxDimension?: number };
+  cameraPixels: { rows: number; cols: number; rowBytes: number; pixels: Uint8Array } | null;
+};
 type DebugWindow = Window & {
   __roomTest: MockState;
   __roomshiftFacility?: {
@@ -23,6 +31,7 @@ async function twoPlayersInPuzzle1(browser: Browser) {
   const ctxA = await browser.newContext({ permissions: ["accelerometer", "gyroscope", "magnetometer"] });
   const ctxB = await browser.newContext();
   await ctxA.addInitScript({ content: xr8Mock });
+  await ctxA.route("**/__fixtures/*.jpg", (route) => route.fulfill({ path: fixture(route.request().url().split("/").pop()!) }));
   await ctxA.addInitScript(() => {
     const w = window as unknown as DebugWindow;
     w.gumCalls = 0;
@@ -77,8 +86,8 @@ test("facility: preview is labeled NOT AR, AR places it, scanner hand-off releas
   expect(placed.visible).toBe(true);
   expect(placed.ar).toBe(true);
 
-  // Scanner hand-off: XR8 stops and its camera track is released BEFORE the scanner mounts.
-  await a.getByRole("button", { name: /SCAN OBJECTS/ }).click();
+  // Full-scanner hand-off (QR backup / manual): XR8 stops and releases its camera BEFORE the scanner mounts.
+  await a.getByRole("button", { name: /FULL SCANNER/ }).click();
   await expect(a.getByText("Breaker: scan sequence")).toBeVisible();
   const afterScan = await mock(a);
   expect(afterScan.stops).toBeGreaterThanOrEqual(1);
@@ -122,5 +131,90 @@ test("facility: preview is labeled NOT AR, AR places it, scanner hand-off releas
   await expect(a.getByText("Comms boot sequence")).toBeVisible();
   expect((await mock(a)).stops).toBeGreaterThan(before.stops);
 
+  await close();
+});
+
+/**
+ * Feeds the XR8 double's camera with one view: a crop of a real CC0 book or mug photo
+ * (ar/tests/fixtures/README.md) on a table-coloured frame, or nothing. The real COCO-SSD
+ * model runs on these AR frames.
+ */
+async function arCameraSees(p: Page, view: "book" | "mug" | "none") {
+  await p.evaluate(async (v) => {
+    const state = (window as unknown as DebugWindow).__roomTest;
+    if (v === "none") {
+      state.cameraPixels = null;
+      return;
+    }
+    const image = new Image();
+    image.src = `/__fixtures/${v}.jpg`;
+    await image.decode();
+    const canvas = document.createElement("canvas");
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext("2d")!;
+    ctx.fillStyle = "#6f5a46";
+    ctx.fillRect(0, 0, 640, 480);
+    if (v === "book") ctx.drawImage(image, 330, 160, 300, 420, 177, 40, 286, 400);
+    else ctx.drawImage(image, 500, 160, 340, 240, 150, 120, 340, 240);
+    const data = ctx.getImageData(0, 0, 640, 480).data;
+    state.cameraPixels = { rows: 480, cols: 640, rowBytes: 640 * 4, pixels: new Uint8Array(data.buffer.slice(0)) };
+  }, view);
+}
+
+test("scan in AR: objects are scanned from the AR camera feed without leaving AR or opening a second camera", async ({ browser }) => {
+  test.setTimeout(240_000);
+  const { a, b, close } = await twoPlayersInPuzzle1(browser);
+  await a.getByRole("button", { name: "FACILITY · AR" }).click();
+  await expect(a.getByText("3D PREVIEW · NOT AR", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await startAndPlace(a);
+  const stopsBefore = (await mock(a)).stops;
+
+  await a.getByRole("button", { name: /SCAN IN AR 0\/3/ }).click();
+  await expect(a.getByText("Point the phone at ONE object.")).toBeVisible({ timeout: 90_000 }); // model loaded
+  const tap = await a.evaluate(() => {
+    const s = (window as unknown as DebugWindow).__roomTest;
+    return { names: s.modules.map((m) => m.name), maxDimension: s.pixelOptions?.maxDimension };
+  });
+  expect(tap.names).toEqual(expect.arrayContaining(["camerapixelarray", "roomshift-scan-tap"]));
+  expect(tap.maxDimension).toBe(640);
+
+  const card = a.getByLabel("Object scan progress");
+  await arCameraSees(a, "book");
+  await expect(card.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(a.getByText("BOOK SCANNED ✓ — FIND THE CUP")).toBeVisible();
+  await expect(a.getByText(/SEEING: BOOK \d+%/)).toBeVisible();
+
+  await arCameraSees(a, "none");
+  await a.waitForTimeout(1000);
+  await arCameraSees(a, "mug");
+  await expect(card.getByLabel("CUP: scanned")).toBeVisible({ timeout: 60_000 });
+  await expect(card.getByLabel("BOOK: scanned")).toBeVisible(); // stays scanned out of view
+  await expect(card.getByLabel("KEYBOARD: not scanned")).toBeVisible();
+  await a.screenshot({ path: "test-results/facility-scan-in-ar.png" });
+
+  // AR kept running the whole time, the facility stayed placed, and no second camera opened.
+  await expect(a.getByText("AR · WORLD TRACKING")).toBeVisible();
+  expect((await snapshot(a)).placed).toBe(true);
+  expect((await mock(a)).stops).toBe(stopsBefore);
+  expect(await a.evaluate(() => (window as unknown as DebugWindow).gumCalls)).toBe(0);
+
+  // The progress is the server's: B's scanner shows it too.
+  await expect(b.getByLabel("Scanned objects").getByLabel("CUP: scanned")).toBeVisible({ timeout: 15_000 });
+
+  // STOP SCANNING removes the frame tap (no more pixel reads).
+  await a.getByRole("button", { name: "STOP SCANNING" }).click();
+  await expect
+    .poll(() => a.evaluate(() => (window as unknown as DebugWindow).__roomTest.modules.map((m) => m.name)))
+    .not.toContain("camerapixelarray");
+
+  // B finishes with a manual report; A's AR view powers up.
+  await b.getByRole("button", { name: "Manual report", exact: true }).click();
+  const slots = b.locator(".manual-slots select");
+  await slots.nth(0).selectOption("book");
+  await slots.nth(1).selectOption("cup");
+  await slots.nth(2).selectOption("keyboard");
+  await b.getByRole("button", { name: /Report sequence/ }).click();
+  await expect(a.getByText("BREAKER ONLINE")).toBeVisible({ timeout: 15_000 });
   await close();
 });
