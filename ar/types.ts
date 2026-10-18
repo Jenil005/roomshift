@@ -23,16 +23,33 @@ export type ObjectSighting = DetectedMarker & {
   label?: string; // detector class name, e.g. "book"
 };
 
-/** Client evidence only. The authoritative game server must validate submissions. */
+/**
+ * One newly recognized object, reported once by the scanner so the host can record it
+ * (with a game server: the puzzle1:scan request). Client evidence only; the server judges.
+ */
+export type ObjectScanReport = {
+  id: MarkerId;
+  evidence: Exclude<EvidenceSource, "manual">;
+  score?: number; // detector confidence, set for AI scans
+};
+
+/** A short status line for the scanner, e.g. a server verdict. */
+export type ScanNotice = {
+  tone: "success" | "info" | "error";
+  text: string;
+};
+
+/**
+ * Puzzle outcome. With a game server only the manual report is sent this way (camera scans
+ * go one object at a time as ObjectScanReport); the standalone demo also reports a locally
+ * completed scan sequence. Client evidence only: the authoritative server validates it.
+ */
 export type PhysicalPuzzleResult = {
   solved: boolean;
-  markers: DetectedMarker[];
   detectedIds: MarkerId[];
-  order: MarkerId[];
-  // "camera" covers QR and AI+QR hybrid evidence (both are observed positions in one frame).
+  order: MarkerId[]; // scan sequence (camera) or reported sequence (manual)
   source: "camera" | "manual";
-  heldForMs: number;
-  // Per-object evidence source. Informational: the server strips unknown keys today.
+  // Per-object evidence source. Informational: the server strips unknown keys.
   evidence?: Partial<Record<MarkerId, EvidenceSource>>;
 };
 

@@ -1,4 +1,10 @@
-import { MARKER_IDS, type MarkerId, type ObjectSighting } from "../types";
+import { PUZZLE1_SCAN_MIN_CONFIDENCE } from "../../shared/constants";
+import {
+  MARKER_IDS,
+  type MarkerId,
+  type ObjectScanReport,
+  type ObjectSighting,
+} from "../types";
 import { bboxToMarker, iou, type PixelBox } from "./geometry";
 
 /** One raw detector output, in pixels of the frame that was passed to the detector. */
@@ -24,8 +30,8 @@ export type ConfidenceThresholds = Readonly<Record<string, number>> & {
   readonly default: number;
 };
 // COCO-SSD's own default is 0.5. COCO-SSD lite scores real books low (0.45-0.55 for a clear
-// cover in our tests), so books get a lower bar; cups score high, so they get a higher one.
-// The 1.2 s hold, the order check and the KEYS QR tag still have to pass on top of this.
+// cover in our tests), so books get a lower bar for display; cups score high, so they get a
+// higher one. A scan that counts for the puzzle also needs SCAN_MIN_CONFIDENCE (below).
 export const AI_CONFIDENCE: ConfidenceThresholds = {
   default: 0.5,
   book: 0.45,
@@ -37,6 +43,48 @@ export function minScoreFor(
   thresholds: ConfidenceThresholds = AI_CONFIDENCE,
 ): number {
   return Object.hasOwn(thresholds, label) ? thresholds[label] : thresholds.default;
+}
+
+// A single frame marks an object scanned for good (no hold filters out a flicker), so the
+// scan bar is higher than the display bar. COCO-SSD values; not yet tuned on an iPhone.
+export const AI_SCAN_CONFIDENCE: ConfidenceThresholds = {
+  default: 0.55,
+  book: 0.5,
+  cup: 0.6,
+};
+// The server refuses AI scans below this floor, whatever the detector.
+export const SCAN_MIN_CONFIDENCE = PUZZLE1_SCAN_MIN_CONFIDENCE;
+
+export function scanScoreFor(
+  label: string,
+  scanThresholds: ConfidenceThresholds = AI_SCAN_CONFIDENCE,
+): number {
+  return Math.max(minScoreFor(label, scanThresholds), SCAN_MIN_CONFIDENCE);
+}
+
+/**
+ * Sightings in one frame that are strong enough to mark their object scanned: AI sightings
+ * at or above scanScoreFor(label), or a decoded QR tag. The best sighting per object wins.
+ * Pass the detector's own scanThresholds: scores are not comparable across models.
+ */
+export function scanCandidates(
+  sightings: readonly ObjectSighting[],
+  scanThresholds: ConfidenceThresholds = AI_SCAN_CONFIDENCE,
+): ObjectScanReport[] {
+  const best = new Map<MarkerId, ObjectScanReport>();
+  for (const s of sightings) {
+    if (s.evidence === "ai") {
+      const score = s.score;
+      if (score === undefined || !Number.isFinite(score)) continue;
+      if (score < scanScoreFor(s.label ?? s.id, scanThresholds)) continue;
+      const current = best.get(s.id);
+      if (!current || (current.evidence === "ai" && (current.score ?? 0) < score))
+        best.set(s.id, { id: s.id, evidence: "ai", score });
+    } else if (!best.has(s.id)) {
+      best.set(s.id, { id: s.id, evidence: "qr" });
+    }
+  }
+  return MARKER_IDS.flatMap((id) => best.get(id) ?? []);
 }
 
 // Two boxes of the same object overlapping this much are one detection, not a duplicate.

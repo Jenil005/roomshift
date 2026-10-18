@@ -1,6 +1,6 @@
 # RoomShift AR module
 
-The phone-camera side of RoomShift: the physical object puzzle (puzzle 1) and the shared 3D control room for Blackout Protocol. The puzzle uses on-device AI object detection for the book and the cup, and printed QR tags for the keys and as a full backup. `facility/` adds the world-tracked facility the game uses (Niantic XR Engine + Three.js).
+The phone-camera side of RoomShift: the physical object puzzle (puzzle 1) and the shared 3D control room for Blackout Protocol. The puzzle scans a book, a cup and a keyboard one at a time with on-device AI object detection; printed QR tags are an optional backup. `facility/` adds the world-tracked facility the game uses (Niantic XR Engine + Three.js).
 
 ## In the RoomShift game
 
@@ -8,8 +8,8 @@ The game (`frontend/`) uses this module as follows. Sections further down descri
 
 | Game feature | Module code | Notes |
 |---|---|---|
-| Puzzle 1 scanner | `PhysicalPuzzle` with `serverJudged` | The server judges every result, including manual reports. AI, QR backup and manual modes as described below |
-| Detector | `detect/selectDetector.ts` → `cocoSsdDetector.ts` (default) or `mediapipeDetector.ts` | `?detector=coco|mediapipe|auto`. MediaPipe Tasks Vision 1.0.1 with EfficientDet-Lite0 float16; thresholds book 0.35, cup 0.4. Both models see `book` and `cup` only: **KEYS always needs its QR tag** |
+| Puzzle 1 scanner | `PhysicalPuzzle` with `scans` and `serverJudged` | Each newly recognized object goes to the server (`puzzle1:scan`), which keeps the team's progress and judges the sequence. AI, QR backup and manual modes as described below |
+| Detector | `detect/selectDetector.ts` → `cocoSsdDetector.ts` (default) or `mediapipeDetector.ts` | `?detector=coco|mediapipe|auto`. MediaPipe Tasks Vision 1.0.1 with EfficientDet-Lite0 float16; display thresholds book 0.35, cup 0.4, keyboard 0.45; scan thresholds `MEDIAPIPE_SCAN_CONFIDENCE`. Both models map COCO `book`, `cup` and `keyboard` |
 | World-tracked facility | `facility/session.ts`, `facility/scene.ts`, `facility/placement.ts` | Typed port of `public/ar-room.js`, `facility.js`, `room-placement.js` (same placement tests). Facility lights, terminal and door follow the server's `room.systems`; taps on the 3D terminal send real `puzzle2:draft` requests |
 | One camera owner | `FacilitySession.stopAR()` before the scanner mounts | The scanner and the XR Engine never hold the camera at the same time |
 | Tester diagnostics | `debugChannel.ts` | Camera owner, detector and inference time, tracking status; shown by the game's `?debug` overlay |
@@ -20,25 +20,25 @@ The `room/RoomScene.ts` shared room and `sync/` classes are used only by the sta
 
 This section is written for the Devpost write-up. It only states what has been built and tested. Update the "Verification" line after the real-phone test.
 
-**Physical puzzle, AI first.** A player points their phone camera at three real objects on a table: a book, a cup and a set of keys. A COCO-SSD object detection model, running on the phone with TensorFlow.js, recognizes the book and the cup without any tags and draws a box with its confidence on each. COCO-SSD has no "keys" class, so the keys carry a small printed QR tag, which the app reads from the same camera frame. The app sorts the three objects left to right and asks the team to hold the right arrangement steady for 1.2 seconds. It then sends the object positions to the RoomShift server, which re-derives the order and decides whether the puzzle is solved. The phone never declares a win by itself, and AI sightings alone can never complete the puzzle. Camera images never leave the phone.
+**Physical puzzle, AI first.** The team agrees on an order from their clues, then a player scans three real objects one at a time: a book, a cup and a keyboard. A COCO-SSD object detection model, running on the phone with TensorFlow.js, recognizes each object without tags. As soon as one frame shows a single new object with enough confidence, it is marked SCANNED with a green check and stays scanned when the camera moves on; no hold, no QR code and no three-object frame. Each scan goes to the RoomShift server, which keeps the team's progress and checks it against the sequence; an object out of sequence clears the progress after a one-second cooldown. The phone never declares a win by itself. Camera images never leave the phone.
 
-**Fallbacks.** **QR Backup** reads printed QR tags on all three objects (the original scanner, decoded in a background worker about 8 times a second). If the AI model cannot load, or takes more than 15 seconds, the app offers QR Backup straight away. If the camera is blocked, missing, or the page is not on HTTPS, the player gets a clear message and a **Manual** mode, which is labelled as a fallback and recorded by the server as "manual". In dim light the QR scanner shows a lighting hint and, on phones that support it, a torch button.
+**Fallbacks.** **QR Backup** reads printed QR tags, one tag at a time with the same rules (decoded in a background worker about 8 times a second). If the AI model cannot load, or takes more than 15 seconds, the app offers QR Backup straight away. If the camera is blocked, missing, or the page is not on HTTPS, the player gets a clear message and a **Manual** mode, which is labelled as a fallback and recorded by the server as "manual". In dim light the QR scanner shows a lighting hint and, on phones that support it, a torch button.
 
 **Shared room.** Every phone renders the same Blackout Protocol control room from one data template using three.js. The breaker lights, the terminal screen and the security door reflect the state the server sends, so all players see the facility come back to life together. Players look around by moving the phone (motion sensors) or by dragging, with a Recenter button.
 
 **Phone care.** The camera is released whenever the scan screen closes or the page is hidden. The room stops rendering while hidden, caps its resolution, and recovers if the phone drops the graphics context. The layout is built for portrait phones down to 320 px wide.
 
-**Why AI plus QR.** AI detection lets players use ordinary objects with no stickers. QR tags stay because COCO-SSD cannot see keys, and because tags are very reliable on ordinary phones when lighting or the model lets you down.
+**Why AI plus QR.** AI detection lets players use ordinary objects with no stickers. QR tags stay as a backup because they are very reliable on ordinary phones when lighting or the model lets you down.
 
 **Built with:** TypeScript, React 19, TensorFlow.js (WebGL), COCO-SSD, jsQR, three.js, Vite. No API keys or environment variables.
 
-**Verification:** 70 unit tests and 20 browser tests pass in desktop Chrome. The browser tests use simulated cameras and phone-sized screens; the AI tests run the real COCO-SSD model on real CC0 photos of a book and a mug. The real-phone checklist is in `ar/MANUAL_TEST.md`. **Not yet run on a real phone.**
+**Verification:** unit tests and browser tests pass in desktop Chrome (`npm test`, `npm run test:browser`). The browser tests use simulated cameras and phone-sized screens; the AI tests run the real COCO-SSD model on real CC0 photos of a book and a mug. The real-phone checklist is in `ar/MANUAL_TEST.md`. **Not yet run on a real phone.**
 
 ## Run
 
 From the repository root, use Node.js 22.12+ or 24.
 
-- **Physical puzzle demo:** `npm ci`, then `npm run dev`. The AI scanner is the default. Open **Marker cards** (or `ar/print/tags.html`) and print the three tags at actual size: the KEYS tag is needed in AI mode, all three in QR backup.
+- **Physical puzzle demo:** `npm ci`, then `npm run dev`. The AI scanner is the default. Open **Marker cards** (or `ar/print/tags.html`) and print the three tags at actual size if you want the QR backup; AI mode needs none.
 - **Shared room demo:** `cd ar`, `npm install`, then `npm run dev`. Tap **Host a room**, then join from a second tab with the 4-letter code or the guest URL in the message. This uses same-browser sync only (see "Shared AR room").
 
 Phones need HTTPS for the camera and motion sensors; a plain `http://` LAN address will not work. Desktop `localhost` counts as secure.
@@ -47,32 +47,30 @@ Phones need HTTPS for the camera and motion sensors; a plain `http://` LAN addre
 
 `PhysicalPuzzle` has three modes, switchable at any time without a reload. Switching stops the previous scanner and releases its camera first.
 
-| Mode | Book | Cup | Keys | Result `evidence` |
+| Mode | Book | Cup | Keyboard | Result `evidence` |
 |---|---|---|---|---|
-| **AI scanner** (default) | AI | AI | QR tag, same frame | `{ book: "ai", cup: "ai", keys: "qr" }` |
+| **AI scanner** (default) | AI | AI | AI | `{ book: "ai", cup: "ai", keyboard: "ai" }` |
 | **QR backup** | QR tag | QR tag | QR tag | all `"qr"` |
-| **Manual demo** | typed order | | | all `"manual"` |
+| **Manual demo** | reported sequence | | | all `"manual"` |
 
 **How it works.** Selecting AI scanner dynamically imports TensorFlow.js and COCO-SSD and loads the model once per page (`detect/cocoSsdDetector.ts`). Switching modes and remounting the puzzle reuse it; call `releaseCocoSsdDetector()` to free it when the game leaves puzzle 1. The camera opens only after the player taps **Start AI camera**. `detect/AiScanSession.ts` then runs one cycle at a time, at most about 4 per second: it draws the video into a 640 px wide canvas, runs the detector on it, and in parallel decodes QR tags from a 960 px copy of the same frame in the existing web worker (only for objects the model cannot see). Frames are processed in memory and discarded.
 
-**Supported objects.** COCO-SSD recognizes 80 COCO classes; the puzzle uses `book` and `cup` (`COCO_CLASS_MAP`). Other classes, such as "person" or "dining table", are drawn dimmed so players can see what the model sees, but never count. **Keys are not a COCO class.** The app never claims to recognize keys by AI; the KEYS chip shows "NEEDS QR TAG" until the KEYS QR tag is seen.
+**Supported objects.** COCO-SSD recognizes 80 COCO classes; the puzzle uses `book`, `cup` and `keyboard` (`COCO_CLASS_MAP`). Other classes, such as "person" or "dining table", are drawn dimmed so players can see what the model sees, but never count.
 
-**Thresholds** (`detect/objectClasses.ts`): book 0.45, cup 0.55, other classes 0.5. In our tests COCO-SSD lite scored a clear, upright book cover at only 0.45–0.55, and did not find a flat book half covered by a phone at all, so books get a lower bar. For the demo, show the book's cover to the camera. Overlapping boxes of one object (IoU above 0.5) are merged; two separate boxes of the same object (two cups) are kept and reported as "DUPLICATE OBJECT".
+**Thresholds** (`detect/objectClasses.ts`). Display: book 0.45, cup 0.55, others 0.5 (`AI_CONFIDENCE`). Scanning: one frame marks an object scanned for good, so the bar is stricter, book 0.5, cup 0.6, others 0.55 (`AI_SCAN_CONFIDENCE`; MediaPipe has its own `MEDIAPIPE_SCAN_CONFIDENCE` because its scores run lower), and never below the server's floor `PUZZLE1_SCAN_MIN_CONFIDENCE` (0.35). These were chosen from desktop photo tests (COCO-SSD book 0.67, cup 0.96; MediaPipe book 0.42, cup 0.79) and are **not yet tuned on an iPhone or on real keyboards**.
 
-**Arrangement check.** The same `PhysicalOrderTracker` as the QR scanner, with AI tuning (`AI_TRACKER_OPTIONS` in `AiScanner.tsx`):
+**Sequential scanning** (`scan/objectScan.ts`, `ScanProgress.tsx`):
 
-- the same 1.2 s hold, which must contain at least 3 fresh frames;
-- box centers may drift up to 0.06 (QR: 0.035), and the row may span 0.3 vertically (QR: 0.16), because boxes of different-sized objects jitter more than QR corners;
-- the allowed gap between fresh frames adapts to the device: about 3 times the measured frame interval, between 1 s and 2.5 s (`adaptiveFrameGap`). One slow inference does not reset a valid hold, but a stalled camera or model always does. Only the current frame's detections count; boxes remembered briefly for display (drawn dashed) never count as evidence.
-- AI-mode results are reported only if every object is present and at least one came from a non-AI source (`hybridEvidenceAccepted`).
+- `decideFrame`: exactly one new confident object in the frame is reported (`onObjectScanned`); an already scanned object in view shows "BOOK ALREADY SCANNED"; two or more new objects at once record nothing and ask for one at a time, so a crowded frame cannot scan them in an accidental order.
+- Progress (`scanned`) is owned by the host: in the game, the server's accepted scans plus this phone's queued ones; in the standalone demo, `LocalScanJudge` applies the same sequence rule.
+- Messages: "BOOK SCANNED ✓ — FIND THE CUP", "CUP SCANNED ✓ — FIND THE KEYBOARD", "KEYBOARD SCANNED ✓ — VERIFYING SEQUENCE", then "BREAKER RESTORED — PUZZLE COMPLETE" only after the server accepts the sequence.
+- The camera stops once all three are scanned.
 
-The QR scanner's own tuning is unchanged (500 ms gap, 0.035 drift, 0.16 row, 1 frame).
-
-**Status messages:** INITIALIZING AI, CAMERA READY, SCANNING OBJECTS, BOOK + CUP DETECTED, OBJECT NOT RECOGNIZED, LINE THEM UP, WRONG ORDER, DUPLICATE OBJECT, HOLD STEADY, ARRANGEMENT VERIFIED, SWITCH TO QR BACKUP. Confidence values on screen are the model's real scores.
+**Status messages:** INITIALIZING AI, CAMERA READY, POINT AT ONE OBJECT, OBJECT NOT RECOGNIZED, the scan messages above, BREAKER RESETTING, SWITCH TO QR BACKUP. Confidence values on screen are the model's real scores.
 
 **Failures.** No WebGL: "unsupported". Model download failure: "model-failed", with **Switch to QR backup** and **Retry AI**. Loading for more than 15 s (`MODEL_LOAD_TIMEOUT_MS`): **Switch to QR backup** appears while loading continues in the background. Camera errors use the same messages as the QR scanner.
 
-**Swapping the detector.** Any detector implementing `ObjectDetector` (`detect/ObjectDetector.ts`: `name`, `classMap`, `detect(canvas)`) can be passed to `PhysicalPuzzle` as `loadDetector`. A MediaPipe Object Detector with a custom model trained on keys would declare `keys` in its `classMap`; KEYS would then stop needing a QR tag automatically (`qrOnlyIds`). `detect/mediapipeDetector.ts` is a MediaPipe adapter with the stock EfficientDet-Lite0 model, which has no keys class either; no keys model exists yet.
+**Swapping the detector.** Any detector implementing `ObjectDetector` (`detect/ObjectDetector.ts`: `name`, `classMap`, `detect(canvas)`) can be passed to `PhysicalPuzzle` as `loadDetector`. A detector declares its own `thresholds` and `scanThresholds`, since scores are not comparable across models. `detect/mediapipeDetector.ts` is a MediaPipe adapter with the stock EfficientDet-Lite0 model.
 
 **iPhone / PWA notes.** Inference is frontend-only (TF.js WebGL backend), with no native ARKit. The video element is `muted` and `playsinline`; the camera starts only after a tap; the session stops all tracks when the page is hidden (`visibilitychange`), on mode switch, on Stop camera and on unmount, and scanning needs an explicit restart after the page was hidden. `PhysicalPuzzle` calls `onScanningChange(true)` while a camera scan is live so the host can call `RoomScene.stop()` and resume with `start()` afterwards. The first load downloads about 18 MB of model weights, so use Wi-Fi; the browser caches them afterwards (the app has no service worker, so offline use is not guaranteed). Not yet run on an iPhone.
 
@@ -88,15 +86,13 @@ The QR scanner's own tuning is unchanged (500 ms gap, 0.035 drift, 0.16 row, 1 f
 
 These modular packages are used instead of the `@tensorflow/tfjs` umbrella package, which would add unused layers/data code. The main bundle grew by about 18 kB (about 6 kB gzip) for the AI scanner UI; everything above loads only when AI scanner is shown.
 
-**Testing object recognition.** `npm test` covers class mapping, box conversion, cover-crop mapping, confidence filtering, duplicates, hybrid evidence, ordering, hold timing, the adaptive gap and the model loader (mocked). `npm run test:browser` (`ar/tests/browser/ai.spec.ts`) runs the real model in Chrome on a fake camera made from two CC0 photos (`ar/tests/fixtures/`): it checks that BOOK and CUP are found with real scores, that the puzzle does not solve without the KEYS tag, that it solves with it, model-load failure and timeout, mode-switch camera release, page hiding, and a 320 px layout. In headless Chrome on the dev laptop (software WebGL) inference took about 1.3–1.5 s per frame; phones with GPU WebGL should be faster, but this is unmeasured. On a phone, follow section E of `ar/MANUAL_TEST.md`.
+**Testing object recognition.** `npm test` covers class mapping, box conversion, cover-crop mapping, display and scan thresholds, duplicates, single-object scan decisions, scan messages, the local judge and the model loader (mocked). `npm run test:browser` (`ar/tests/browser/ai.spec.ts`) runs the real model in Chrome on a fake camera made from two CC0 photos (`ar/tests/fixtures/`): BOOK then CUP are scanned one at a time and stay scanned out of frame, a repeat shows ALREADY SCANNED, a crowded frame records nothing, an out-of-sequence first scan resets, and KEYBOARD is scanned by its QR tag (no keyboard photo fixture yet). Also model-load failure and timeout, mode-switch camera release, page hiding, and a 320 px layout. On a phone, follow section E of `ar/MANUAL_TEST.md`.
 
 ## QR Backup details
 
 Select **QR backup**, then **Enable camera** and allow access. The app requests the rear camera without audio.
 
-- All three tags must be visible, horizontally separated, in roughly the same row, and in the correct order for 1.2 s.
-- Their centers must stay within 0.035 (normalized) of where the hold started. Larger motion restarts the hold; small jitter is tolerated.
-- A missing or duplicate tag, a wrong order, or a gap of more than 500 ms between frames resets the hold.
+- Show one tag at a time; each new tag is scanned at once and stays scanned. Same rules as the AI scanner (duplicates, one new object per frame, sequence judged by the host).
 - Overlays follow the unmirrored camera image.
 
 The camera is released on completion, stop, mode change, unmount, or a hidden page. After the page is hidden, scanning needs an explicit restart.
@@ -105,49 +101,26 @@ If access is denied, the camera is unavailable, or tracking is unreliable, use *
 
 ### Tags and scanning contract (docs/AR_AGENT.md section 6)
 
-1. **Tag payload:** exactly `roomshift:v1:<objectId>`, where `<objectId>` is one of `OBJECT_IDS` in `shared/constants` (`book`, `cup`, `keys`). Anything else, including the old `ROOMSHIFT:BOOK` cards and wrong-case ids, is ignored without an error (`scan/tagPayload.ts`). Reprint old cards.
-2. **Worker decoding:** `scan/CameraScanSession.ts` captures frames (max 960 px wide, about 8 per second, one frame in flight) and decodes them with jsQR in `scan/decodeWorker.ts`. If the worker cannot start, it decodes on the main thread. jsQR is used rather than `qr-scanner` because the arrangement check needs every tag in one frame, and `qr-scanner` returns one code per frame.
-3. **`ScanSession`** (`types.ts`), implemented by `CameraScanSession`: `start(video)`, `stop()`, `onScan(id)`, `onError({ code })` with `denied | no-camera | insecure-context | unknown`. Extras: `onMarkers(markers, now)` for the arrangement check, `onEnded("hidden" | "track-ended")`, `torchSupported()` and `setTorch(on)`.
+1. **Tag payload:** exactly `roomshift:v1:<objectId>`, where `<objectId>` is one of `OBJECT_IDS` in `shared/constants` (`book`, `cup`, `keyboard`). Anything else, including the old `ROOMSHIFT:BOOK` cards and wrong-case ids, is ignored without an error (`scan/tagPayload.ts`). Reprint old cards.
+2. **Worker decoding:** `scan/CameraScanSession.ts` captures frames (max 960 px wide, about 8 per second, one frame in flight) and decodes them with jsQR in `scan/decodeWorker.ts`. If the worker cannot start, it decodes on the main thread. jsQR is used rather than `qr-scanner` because it returns every tag in a frame, which lets the scanner tell a crowded frame from a single tag.
+3. **`ScanSession`** (`types.ts`), implemented by `CameraScanSession`: `start(video)`, `stop()`, `onScan(id)`, `onError({ code })` with `denied | no-camera | insecure-context | unknown`. Extras: `onMarkers(markers, now)` for per-frame scanning, `onEnded("hidden" | "track-ended")`, `torchSupported()` and `setTorch(on)`.
 4. **Debounce:** `onScan` fires once per tag sighting. A tag is ignored until it has been out of view for 1.5 s (`ScanDebouncer`). Each accepted scan vibrates where supported (Android).
 5. **`ScanSequence`:** `append(id)` (repeats ignored), `clear()`, `current()`. `PhysicalPuzzle` shows it and reports it through `onScanSequence`.
 6. **Printable tags:** `ar/print/tags.html` (7 cm QR per object with a large label). Regenerate it and `ar/public/markers/*.svg` with `npm run markers`.
 
 ### Result and submission
 
-`PhysicalPuzzle` calls `onResult(result)` once, after the local check passes. The `PhysicalPuzzleResult` type lives in `ar/types.ts`:
+With a game server, pass `scans` (`HostScans`): `scanned`, `pending`, `onObjectScanned(report)`, `notice`, `paused`, `onRestart`. Each `ObjectScanReport` is `{ id, evidence: 'ai' | 'qr', score? }`; the game sends it as `puzzle1:scan` (see `docs/game-api.md`). `onResult` then carries only the manual report:
 
 ```ts
-{
-  solved: true,
-  markers: detections,                  // { id, center: { x, y }, corners: [...] }[]
-  detectedIds: ['book', 'cup', 'keys'], // camera discovery order, not spatial order
-  order: ['book', 'cup', 'keys'],       // left to right
-  source: 'camera',                     // QR and AI+QR hybrid; or 'manual'
-  heldForMs: 1200,
-  evidence: { book: 'ai', cup: 'ai', keys: 'qr' } // per object: 'ai' | 'qr' | 'manual'
-}
+{ solved: false, detectedIds: [], order: ['book', 'cup', 'keyboard'], source: 'manual', evidence: { book: 'manual', cup: 'manual', keyboard: 'manual' } }
 ```
 
-Manual results have `markers: []`, `detectedIds: []`, `heldForMs: 0` and every `evidence` value `"manual"`. AI markers also carry `evidence`, `score` and `label`; the server's request schema strips these unknown keys today, so they are informational only. For AI objects, `center` is the bounding-box center and `corners` the box corners.
-
-What to send in `puzzle:submit` (see `checkPuzzle1` in the backend and `docs/game-api.md`):
-1. Prefer `physical` = the `onResult` value. The server sorts marker centers itself and requires a 1.2 s hold; it ignores the client's `solved`, `order` and `detectedIds`.
-2. Otherwise `scanned` = the scan sequence.
-3. Otherwise `manualCode` (for example `BCK`).
+Without `scans` (standalone demo) the component judges locally and `onResult` also reports a completed scan sequence with `source: 'camera'` and per-object `evidence`.
 
 Client evidence is not tamper-proof and never authorizes a win on its own.
 
-`detectMarkers` (no React) accepts RGBA frame pixels. It searches overlapping vertical strips so finder patterns from neighbouring QR codes don't mix, then masks each decoded code to avoid reading it twice. Two physical cards with the same id stay separate detections, and the validator rejects them. Limits: 960 px wide, at most eight codes per frame, about eight frames per second. Camera focus, lighting, perspective and device speed still affect reliability.
-
-`PhysicalOrderTracker` (no React) takes normalized detections and a monotonic timestamp. `toCameraResult` gives a serializable result on any frame, including `solved: false` before the hold completes:
-
-```ts
-import { detectMarkers, PhysicalOrderTracker, toCameraResult } from './ar';
-
-const tracker = new PhysicalOrderTracker(); // one tracker per scan session
-const markers = detectMarkers(rgbaPixels, width, height);
-const result = toCameraResult(markers, tracker.update(markers, performance.now()));
-```
+`detectMarkers` (no React) accepts RGBA frame pixels. It searches overlapping vertical strips so finder patterns from neighbouring QR codes don't mix, then masks each decoded code to avoid reading it twice. Two physical cards with the same id stay separate detections. Limits: 960 px wide, at most eight codes per frame, about eight frames per second. Camera focus, lighting, perspective and device speed still affect reliability.
 
 ## Frontend integration
 
@@ -232,7 +205,7 @@ Browser tests use a system Chromium at `/usr/bin/chromium` if present. On Window
 
 The tests cover:
 - real QR image decoding, and missing, duplicate and wrong markers
-- hold stability, permission errors and manual validation
+- one-at-a-time scanning, permission errors and manual validation
 - simulated live-camera verification and camera release
 - the room view at 320 px: toolbar, paused rendering, WebGL context loss, iOS-safe form controls, `RoomScene.stop()`
 - AI detection logic (see "AI object detection") and the real COCO-SSD model on photo fixtures. The AI browser tests launch Chrome with `--enable-unsafe-swiftshader` so headless WebGL works; they take about 2–3 minutes on the dev laptop.

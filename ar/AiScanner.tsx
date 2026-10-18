@@ -2,28 +2,22 @@ import { ArrowUpRight } from "./components/ArrowUpRight";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AiFrame } from "./detect/AiScanSession";
 import { coverTransform } from "./detect/geometry";
-import {
-  adaptiveFrameGap,
-  FrameIntervalMeter,
-  hybridEvidenceAccepted,
-  SightingTracker,
-  type TrackedSighting,
-} from "./detect/hybrid";
-import { aiDetectableIds, type OtherSighting } from "./detect/objectClasses";
+import { SightingTracker, type TrackedSighting } from "./detect/hybrid";
+import { scanCandidates, type OtherSighting } from "./detect/objectClasses";
 import type { ObjectDetector } from "./detect/ObjectDetector";
+import { ScanProgress, useScanNotices } from "./ScanProgress";
 import {
-  PhysicalOrderTracker,
-  toCameraResult,
-  type OrderReading,
-  type OrderStatus,
-  type TrackerOptions,
-} from "./physicalOrder";
+  alreadyScannedText,
+  crowdedText,
+  decideFrame,
+} from "./scan/objectScan";
 import {
   MARKER_IDS,
   MARKER_LABEL,
   type MarkerId,
-  type PhysicalPuzzleResult,
+  type ObjectScanReport,
   type Point,
+  type ScanNotice,
 } from "./types";
 import {
   DETECTOR_ERROR_MESSAGE,
@@ -31,57 +25,34 @@ import {
   useObjectDetector,
 } from "./useAiScanner";
 
-// AI boxes arrive at most ~4 times a second and jitter more than QR corners. The 1.2 s hold
-// is the same; a hold needs at least 3 fresh frames. The allowed gap between frames adapts
-// to the device's inference speed (adaptiveFrameGap: 1 s to 2.5 s).
-export const AI_TRACKER_OPTIONS: Partial<TrackerOptions> = {
-  maxFrameGapMs: 1000,
-  maxCenterDrift: 0.06,
-  maxRowSpread: 0.3,
-  minHoldFrames: 3,
-};
-
-const EMPTY_READING: OrderReading = {
-  status: "incomplete",
-  order: [],
-  progress: 0,
-  heldForMs: 0,
-};
-
-const HEADLINE: Record<OrderStatus, string> = {
-  incomplete: "SCANNING OBJECTS",
-  duplicate: "DUPLICATE OBJECT",
-  unaligned: "LINE THEM UP",
-  "wrong-order": "WRONG ORDER",
-  unstable: "HOLD STEADY",
-  holding: "HOLD STEADY",
-  verified: "ARRANGEMENT VERIFIED",
-};
-
-const GUIDANCE: Record<OrderStatus, string> = {
-  incomplete:
-    "Point at a real book, cup and keyboard. No QR code required.",
-  duplicate:
-    "More than one of the same object is visible. Keep only one in frame.",
-  unaligned:
-    "Place the objects side by side in one row, with space between them.",
-  "wrong-order": "All objects found. Revisit the clues and change their order.",
-  unstable: "Movement detected. Hold the objects and camera steady.",
-  holding: "Correct arrangement. Hold the camera steady…",
-  verified: "Physical arrangement verified.",
-};
+// The same object is not reported again this soon, while the host records the first report.
+const REPORT_DEBOUNCE_MS = 1_000;
 
 /**
- * AI-first physical puzzle scanning: COCO-SSD finds BOOK and CUP; objects the model cannot
- * see can be handled by optional QR backup. BOOK, CUP and KEYBOARD are AI-detectable.
+ * AI-first sequential scanning: point the camera at one object at a time. A single frame with
+ * a confident detection (scanCandidates) marks that object scanned; it stays scanned when it
+ * leaves the frame. `scanned` is the progress to show (the host owns it: the game server's
+ * accepted scans plus this phone's queued ones). No hold, no QR tag and no three-object frame.
+ * The camera stops once all objects are scanned.
  */
 export function AiScanner({
-  onResult,
+  scanned,
+  pending,
+  onObjectScanned,
+  notice: hostNotice,
+  paused = false,
+  onRestart,
   onSwitchToQr,
   onLiveChange,
   loadDetector,
 }: {
-  onResult: (result: PhysicalPuzzleResult) => void;
+  scanned: readonly MarkerId[];
+  pending?: readonly MarkerId[];
+  onObjectScanned: (scan: ObjectScanReport) => void;
+  notice?: ScanNotice | null;
+  /** Nothing is recorded while paused (e.g. the breaker cooldown); the camera stays on. */
+  paused?: boolean;
+  onRestart?: () => void;
   onSwitchToQr: () => void;
   onLiveChange?: (live: boolean) => void;
   loadDetector?: () => Promise<ObjectDetector>;
@@ -91,68 +62,78 @@ export function AiScanner({
   const [attempt, setAttempt] = useState(0);
   const [tracked, setTracked] = useState<TrackedSighting[]>([]);
   const [others, setOthers] = useState<OtherSighting[]>([]);
-  const [reading, setReading] = useState(EMPTY_READING);
   const [inferenceMs, setInferenceMs] = useState(0);
-  const order = useRef(new PhysicalOrderTracker(AI_TRACKER_OPTIONS));
   const sightings = useRef(new SightingTracker());
-  const intervals = useRef(new FrameIntervalMeter());
-  const submitted = useRef(false);
+  const lastReport = useRef<{ id: MarkerId; at: number } | null>(null);
+  const { notice, hint, justScanned } = useScanNotices(scanned, hostNotice);
+  const complete = scanned.length >= MARKER_IDS.length;
 
-  const clearScan = () => {
-    order.current.reset();
+  // Frames arrive from the camera loop; read the latest props through refs.
+  const live = useRef({ scanned, paused, complete, onObjectScanned, hint });
+  live.current = { scanned, paused, complete, onObjectScanned, hint };
+
+  const clearView = () => {
     sightings.current.reset();
-    intervals.current.reset();
     setTracked([]);
     setOthers([]);
-    setReading(EMPTY_READING);
   };
 
   const onFrame = useCallback(
     (frame: AiFrame) => {
-      if (submitted.current) return;
-      // The gap allowed before this frame comes from earlier frames only.
-      order.current.configure({
-        maxFrameGapMs: adaptiveFrameGap(intervals.current.interval),
-      });
-      intervals.current.sample(frame.at);
-      // Only the current frame's sightings count as evidence; remembered ones are display only.
-      const next = order.current.update(frame.sightings, frame.at);
       setTracked(sightings.current.update(frame.sightings, frame.at));
       setOthers(frame.others);
       setInferenceMs(frame.inferenceMs);
-      setReading(next);
-      if (next.status === "verified" && hybridEvidenceAccepted(frame.sightings)) {
-        submitted.current = true;
-        setEnabled(false);
-        onResult(toCameraResult(frame.sightings, next));
+      const now = live.current;
+      if (now.paused || now.complete) return;
+      // Only this frame's sightings count; remembered (stale) boxes are display only.
+      const decision = decideFrame(
+        scanCandidates(frame.sightings, model.detector?.scanThresholds),
+        now.scanned,
+      );
+      if (decision.kind === "report") {
+        const last = lastReport.current;
+        if (last?.id === decision.scan.id && frame.at - last.at < REPORT_DEBOUNCE_MS) return;
+        lastReport.current = { id: decision.scan.id, at: frame.at };
+        now.onObjectScanned(decision.scan);
+      } else if (decision.kind === "duplicate") {
+        now.hint({ tone: "info", text: alreadyScannedText(decision.id) });
+      } else if (decision.kind === "crowded") {
+        now.hint({ tone: "info", text: crowdedText(decision.ids) });
+      } else {
+        now.hint(null);
       }
     },
-    [onResult],
+    [model.detector],
   );
   const camera = useAiScanner(enabled, model.detector, onFrame, attempt);
-  const live = camera.status === "live";
+  const cameraLive = camera.status === "live";
 
   useEffect(() => {
-    onLiveChange?.(live);
-  }, [live, onLiveChange]);
+    onLiveChange?.(cameraLive);
+  }, [cameraLive, onLiveChange]);
   useEffect(() => () => onLiveChange?.(false), [onLiveChange]);
   useEffect(() => {
-    if (camera.status === "error") clearScan();
+    if (camera.status === "error") clearView();
   }, [camera.status]);
+  // Every object is scanned: release the camera.
+  useEffect(() => {
+    if (complete) {
+      setEnabled(false);
+      clearView();
+    }
+  }, [complete]);
 
   const start = () => {
-    clearScan();
+    clearView();
+    lastReport.current = null;
     setAttempt((n) => n + 1);
     setEnabled(true);
   };
   const stop = () => {
     setEnabled(false);
-    clearScan();
+    clearView();
   };
 
-  const aiIds = model.detector ? aiDetectableIds(model.detector.classMap) : [];
-  const fresh = tracked.filter((t) => !t.stale);
-  const seen = (id: MarkerId) => tracked.find((t) => t.id === id);
   const modelBusy = model.status === "loading" || model.status === "slow";
 
   // Recomputed on every render (each inference): the video size can change after rotation.
@@ -178,25 +159,25 @@ export function AiScanner({
     };
   };
 
-  const headline = !live
-    ? modelBusy
-      ? "INITIALIZING AI"
-      : model.status === "ready"
-        ? "CAMERA READY"
-        : model.status === "failed"
-          ? "SWITCH TO QR BACKUP"
-          : "AI SCANNER"
-    : reading.status !== "incomplete"
-      ? HEADLINE[reading.status]
-      : fresh.length > 0
-        ? `${[...new Set(fresh.map((t) => MARKER_LABEL[t.id]))].join(" + ")} DETECTED`
-        : others.length > 0
+  const idleText = complete
+    ? "ALL OBJECTS SCANNED"
+    : !cameraLive
+      ? modelBusy
+        ? "INITIALIZING AI"
+        : model.status === "ready"
+          ? "CAMERA READY"
+          : model.status === "failed"
+            ? "SWITCH TO QR BACKUP"
+            : "AI SCANNER"
+      : paused
+        ? "BREAKER RESETTING"
+        : others.length > 0 && tracked.every((t) => t.stale)
           ? "OBJECT NOT RECOGNIZED"
-          : HEADLINE.incomplete;
+          : "POINT AT ONE OBJECT";
 
   return (
     <>
-      <div className={`camera-stage ${live ? "is-live" : ""}`}>
+      <div className={`camera-stage ${cameraLive ? "is-live" : ""}`}>
         <video
           ref={camera.videoRef}
           muted
@@ -204,7 +185,7 @@ export function AiScanner({
           autoPlay={false}
           aria-label="Live rear camera feed"
         />
-        {live && (
+        {cameraLive && (
           <svg
             className="marker-overlay ai-overlay"
             viewBox="0 0 1000 1000"
@@ -222,49 +203,56 @@ export function AiScanner({
             {tracked.map((t, index) => (
               <g
                 key={`${t.id}-${t.evidence}-${index}`}
-                className={`${t.evidence} ${t.stale ? "stale" : ""}`}
+                className={`${t.evidence} ${t.stale ? "stale" : ""} ${scanned.includes(t.id) ? "scanned" : ""}`}
               >
                 <polygon points={pts(t.corners)} />
                 <text {...labelAt(t.corners)} textAnchor="middle">
                   {MARKER_LABEL[t.id]}{" "}
-                  {t.evidence === "ai" && t.score !== undefined
-                    ? `${Math.round(t.score * 100)}%`
-                    : "QR"}
+                  {scanned.includes(t.id)
+                    ? "✓"
+                    : t.evidence === "ai" && t.score !== undefined
+                      ? `${Math.round(t.score * 100)}%`
+                      : "QR"}
                 </text>
               </g>
             ))}
           </svg>
         )}
-        {!live && (
+        {!cameraLive && (
           <div className="camera-placeholder">
             {modelBusy ? (
               <div className="ai-loader" aria-hidden="true" />
             ) : (
               <div className="scan-symbol" aria-hidden="true">
-                ◎
+                {complete ? "✓" : "◎"}
               </div>
             )}
             <h3>
-              {modelBusy
-                ? "Initializing AI"
-                : model.status === "failed"
-                  ? "AI scanner unavailable."
-                  : camera.status === "starting"
-                    ? "Connecting to your camera"
-                    : "Your room is the puzzle."}
+              {complete
+                ? "All three objects scanned."
+                : modelBusy
+                  ? "Initializing AI"
+                  : model.status === "failed"
+                    ? "AI scanner unavailable."
+                    : camera.status === "starting"
+                      ? "Connecting to your camera"
+                      : "Scan one object at a time."}
             </h3>
             <p>
-              {model.status === "loading"
-                ? "Loading the object model onto this phone (7 to 18 MB, first time only)."
-                : model.status === "slow"
-                  ? "The model is taking longer than expected. Keep waiting, or switch to QR Backup now."
-                  : model.status === "failed"
-                    ? DETECTOR_ERROR_MESSAGE[model.error ?? "model-failed"]
-                    : camera.status === "starting"
-                      ? "Allow camera access when your browser asks."
-                      : "AI finds the book, cup and keyboard. No QR code required."}
+              {complete
+                ? "The camera is off. The facility is checking the sequence."
+                : model.status === "loading"
+                  ? "Loading the object model onto this phone (7 to 18 MB, first time only)."
+                  : model.status === "slow"
+                    ? "The model is taking longer than expected. Keep waiting, or switch to QR Backup now."
+                    : model.status === "failed"
+                      ? DETECTOR_ERROR_MESSAGE[model.error ?? "model-failed"]
+                      : camera.status === "starting"
+                        ? "Allow camera access when your browser asks."
+                        : "Point at a book, a cup or a keyboard. Each one stays scanned. No QR code required."}
             </p>
-            {model.status === "ready" &&
+            {!complete &&
+              model.status === "ready" &&
               (camera.status === "idle" || camera.status === "error") && (
                 <button className="button primary" onClick={start}>
                   {camera.status === "error" ? "Restart AI camera" : "Start AI camera"}{" "}
@@ -273,7 +261,7 @@ export function AiScanner({
                   </span>
                 </button>
               )}
-            {(model.status === "slow" || model.status === "failed") && (
+            {!complete && (model.status === "slow" || model.status === "failed") && (
               <div className="ai-fallback-actions">
                 <button className="button primary" onClick={onSwitchToQr}>
                   Switch to QR backup <span aria-hidden="true">→</span>
@@ -287,7 +275,7 @@ export function AiScanner({
             )}
           </div>
         )}
-        {live && (
+        {cameraLive && (
           <div className="camera-caption">
             <span>AI · {model.detector?.name.startsWith("MediaPipe") ? "MEDIAPIPE" : "COCO-SSD"} · ON-DEVICE</span>
             <span>{inferenceMs > 0 ? `${Math.round(inferenceMs)} MS` : "REAR CAMERA"}</span>
@@ -299,55 +287,24 @@ export function AiScanner({
           {camera.message}
         </p>
       )}
-      <div className="scan-feedback">
-        <p className="ai-headline" aria-live="polite">
-          {headline}
-        </p>
-        <div className="marker-list" aria-label="Detected objects">
-          {MARKER_IDS.map((id, index) => {
-            const s = seen(id);
-            const needsQr = !aiIds.includes(id);
-            const state = s
-              ? s.evidence === "ai"
-                ? `AI ${Math.round((s.score ?? 0) * 100)}%`
-                : "QR"
-              : needsQr
-                ? "NEEDS QR TAG"
-                : "MISSING";
-            return (
-              <span
-                key={id}
-                className={`marker-chip ${s ? "detected" : ""} ${needsQr && !s ? "needs-qr" : ""}`}
-                aria-label={`${MARKER_LABEL[id]}: ${s ? `detected by ${s.evidence === "ai" ? "AI" : "QR tag"}` : needsQr ? "needs QR tag" : "not detected"}`}
-              >
-                <small>0{index + 1}</small>
-                {MARKER_LABEL[id]}
-                <em>{state}</em>
-              </span>
-            );
-          })}
-        </div>
-        <p className="guidance" role="status">
-          {live
-            ? GUIDANCE[reading.status]
-            : "AI runs on this phone. Camera images are never uploaded or stored."}
-        </p>
-        <div
-          className="progress-track"
-          role="progressbar"
-          aria-label="Arrangement stability"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(reading.progress * 100)}
-        >
-          <div style={{ width: `${reading.progress * 100}%` }} />
-        </div>
-        {(live || camera.status === "starting") && (
-          <button className="text-button" onClick={stop}>
-            Stop camera
-          </button>
-        )}
-      </div>
+      <ScanProgress
+        scanned={scanned}
+        pending={pending}
+        notice={notice}
+        idleText={idleText}
+        justScanned={justScanned}
+        onRestart={onRestart}
+      />
+      <p className="guidance" role="status">
+        {cameraLive
+          ? "Move freely between objects. Scanned objects stay scanned."
+          : "AI runs on this phone. Camera images are never uploaded or stored."}
+      </p>
+      {(cameraLive || camera.status === "starting") && (
+        <button className="text-button" onClick={stop}>
+          Stop camera
+        </button>
+      )}
     </>
   );
 }

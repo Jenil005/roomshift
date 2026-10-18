@@ -1,6 +1,5 @@
 import { reportDebug } from "../debugChannel";
 import { detectMarkers } from "../detectMarkers";
-import { MAX_FRAME_GAP_MS } from "../physicalOrder";
 import type {
   DetectedMarker,
   MarkerId,
@@ -9,6 +8,9 @@ import type {
 } from "../types";
 import type { DecodeRequest, DecodeResponse } from "./decodeWorker";
 import { ScanDebouncer } from "./ScanSequence";
+
+// A decode result older than this no longer describes what the camera sees.
+const MAX_FRAME_GAP_MS = 500;
 
 // Modest resolution and rate keep mid-range phones responsive.
 const MAX_FRAME_WIDTH = 960;

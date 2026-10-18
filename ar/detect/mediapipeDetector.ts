@@ -13,14 +13,22 @@ const MODEL_MIN_SCORE = 0.25;
  * EfficientDet-Lite0 scores run lower than COCO-SSD's. Measured on the same CC0 test photos the
  * COCO-SSD thresholds were tuned on (frontend/e2e/detectors.spec.ts, 2026-10-17, desktop
  * Chromium): book 0.42 (COCO-SSD 0.67), cup 0.79 (COCO-SSD 0.96); a weaker second "book" box
- * at 0.25 is rejected. Not yet measured on an iPhone. The 1.2 s hold, the order check and the
- * KEYS QR tag still apply on top.
+ * at 0.25 is rejected. Not yet measured on an iPhone. Marking an object scanned needs the
+ * stricter MEDIAPIPE_SCAN_CONFIDENCE in a single frame.
  */
 export const MEDIAPIPE_CONFIDENCE: ConfidenceThresholds = {
   default: 0.5,
   book: 0.35,
   cup: 0.4,
   keyboard: 0.45,
+};
+
+// Single-frame scan bars for this model (EfficientDet scores run lower than COCO-SSD's).
+export const MEDIAPIPE_SCAN_CONFIDENCE: ConfidenceThresholds = {
+  default: 0.5,
+  book: 0.4,
+  cup: 0.5,
+  keyboard: 0.5,
 };
 
 type Loaded = { detector: ObjectDetector; release: () => void };
@@ -75,6 +83,7 @@ async function load(wasmUrl: string, modelUrl: string): Promise<Loaded> {
     name: `MediaPipe EfficientDet-Lite0 (${delegate})`,
     classMap: COCO_CLASS_MAP, // COCO labels: book, cup and keyboard.
     thresholds: MEDIAPIPE_CONFIDENCE,
+    scanThresholds: MEDIAPIPE_SCAN_CONFIDENCE,
     async detect(frame) {
       if (released || frame.width === 0 || frame.height === 0) return [];
       const result = model.detect(frame);

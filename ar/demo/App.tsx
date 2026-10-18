@@ -18,20 +18,20 @@ const clues = [
   {
     role: "THE ANALYST",
     number: "01",
-    clue: "Knowledge comes before containment.",
-    detail: "The book must come before the cup.",
+    clue: "Knowledge is scanned before containment.",
+    detail: "Scan the book before the cup.",
   },
   {
     role: "THE OPERATOR",
     number: "02",
-    clue: "Access comes last.",
-    detail: "The keyboard belong at the end of the row.",
+    clue: "Access is scanned last.",
+    detail: "Scan the keyboard last.",
   },
   {
     role: "THE ENGINEER",
     number: "03",
-    clue: "Containment connects the other two.",
-    detail: "The cup sits between the other objects.",
+    clue: "Containment is scanned between the other two.",
+    detail: "Scan the cup second.",
   },
 ];
 
@@ -95,12 +95,12 @@ function Mission({ onReset }: { onReset: () => void }) {
                 <h2>
                   {result.source === "camera"
                     ? "Connection restored."
-                    : "Arrangement matched."}
+                    : "Sequence matched."}
                 </h2>
                 <p>
                   {result.source === "camera"
-                    ? "All three objects stayed in the correct order. The physical puzzle is complete on this device."
-                    : "Your reported order matches the clues. Camera verification was not used."}
+                    ? "All three objects were scanned in the correct sequence. The physical puzzle is complete on this device."
+                    : "Your reported sequence matches the clues. Camera verification was not used."}
                 </p>
                 {result.evidence && (
                   <p className="local-note" aria-label="Evidence">
@@ -139,8 +139,9 @@ function Mission({ onReset }: { onReset: () => void }) {
               <div>
                 <h3>Make the physical connection.</h3>
                 <p>
-                  Print the cards, place them on a book, a cup, and a set of
-                  keyboard, then arrange the objects in one row.
+                  Find a book, a cup and a keyboard, then scan them one at a
+                  time in the order the clues describe. No QR code needed;
+                  printed tags are an optional backup.
                 </p>
               </div>
               <a
@@ -181,8 +182,8 @@ function Mission({ onReset }: { onReset: () => void }) {
             <div className="field-note">
               <span aria-hidden="true">⊙</span>
               <p>
-                Use good lighting. Keep cards flat, separate, and fully visible.
-                Hold steady when the arrangement locks in.
+                Use good lighting. Point at one object at a time; each one
+                stays scanned when you move on.
               </p>
             </div>
           </aside>

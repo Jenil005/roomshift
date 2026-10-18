@@ -48,7 +48,7 @@ describe("COCO-SSD loader", () => {
     expect(await detector.detect({} as HTMLCanvasElement)).toEqual([
       { label: "cup", score: 0.9, bbox: [1, 2, 3, 4] },
     ]);
-    expect(detector.classMap).toEqual({ book: "book", cup: "cup" });
+    expect(detector.classMap).toEqual({ book: "book", cup: "cup", keyboard: "keyboard" });
   });
 
   it("reports a model download failure and retries on the next call", async () => {

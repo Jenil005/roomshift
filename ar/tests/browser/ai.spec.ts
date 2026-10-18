@@ -8,23 +8,25 @@ test.use({
   },
 });
 
+type CameraView = "none" | "book" | "mug" | "keyboard-tag" | "book+mug";
 type CameraWindow = typeof window & {
   cameraCalls: number;
   cameraTracks: MediaStreamTrack[];
-  showKeyboard: boolean;
+  view: CameraView;
 };
 
 /**
- * Fake rear camera: crops of two real CC0 photos (a book on the left, a mug in the middle;
- * see ar/tests/fixtures/README.md) with the printed KEYBOARD QR tag on the right when
- * `window.showKeyboard` is true. The real self-hosted COCO-SSD model runs on these frames.
+ * Fake rear camera showing one thing at a time (`window.view`): a crop of a real CC0 book
+ * photo, a real CC0 mug photo (ar/tests/fixtures/README.md), the printed KEYBOARD QR tag,
+ * book and mug together, or an empty table. The real self-hosted COCO-SSD model runs on
+ * these frames. There is no keyboard photo fixture yet, so KEYBOARD is scanned by its tag.
  */
-async function mockPhotoCamera(page: Page) {
-  await page.addInitScript(() => {
+async function mockPhotoCamera(page: Page, view: CameraView = "none") {
+  await page.addInitScript((initial: CameraView) => {
     const state = window as CameraWindow;
     state.cameraCalls = 0;
     state.cameraTracks = [];
-    state.showKeyboard = false;
+    state.view = initial;
     Object.defineProperty(navigator.mediaDevices, "getUserMedia", {
       value: async () => {
         state.cameraCalls += 1;
@@ -46,12 +48,14 @@ async function mockPhotoCamera(page: Page) {
         const draw = () => {
           context.fillStyle = "#6f5a46";
           context.fillRect(0, 0, canvas.width, canvas.height);
-          context.drawImage(book, 330, 160, 300, 420, 67, 40, 286, 400);
-          context.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
-          if (state.showKeyboard) {
+          if (state.view === "book" || state.view === "book+mug")
+            context.drawImage(book, 330, 160, 300, 420, 67, 40, 286, 400);
+          if (state.view === "mug" || state.view === "book+mug")
+            context.drawImage(mug, 500, 160, 340, 240, 430, 120, 340, 240);
+          if (state.view === "keyboard-tag") {
             context.fillStyle = "#ffffff";
-            context.fillRect(890, 110, 260, 260);
-            context.drawImage(keyboard, 900, 120, 240, 240);
+            context.fillRect(510, 110, 260, 260);
+            context.drawImage(keyboard, 520, 120, 240, 240);
           }
         };
         draw();
@@ -67,8 +71,13 @@ async function mockPhotoCamera(page: Page) {
         return stream;
       },
     });
-  });
+  }, view);
 }
+
+const show = (page: Page, view: CameraView) =>
+  page.evaluate((v) => {
+    (window as CameraWindow).view = v;
+  }, view);
 
 const tracksEnded = (page: Page) =>
   page.evaluate(() =>
@@ -92,41 +101,55 @@ test("AI scanner is the default and does not open the camera before a tap", asyn
   expect(await page.evaluate(() => (window as CameraWindow).cameraCalls)).toBe(0);
 });
 
-test("real COCO-SSD finds the book and mug, KEYBOARD needs its QR tag, then the hybrid arrangement verifies", async ({
+test("real COCO-SSD scans BOOK then CUP one at a time; scans persist off-frame; KEYBOARD by tag completes", async ({
   page,
 }) => {
-  test.setTimeout(150_000);
-  await mockPhotoCamera(page);
+  test.setTimeout(180_000);
+  await mockPhotoCamera(page, "book+mug");
   await page.goto("/");
   await page
     .getByRole("button", { name: "Start AI camera" })
     .click({ timeout: 60_000 });
   await expect(page.getByText("AI LIVE", { exact: true })).toBeVisible();
-  const chips = page.getByLabel("Detected objects");
-  await expect(chips.getByLabel("BOOK: detected by AI")).toBeVisible({
-    timeout: 60_000,
-  });
-  await expect(chips.getByLabel("CUP: detected by AI")).toBeVisible();
-  await expect(chips.getByLabel("KEYBOARD: needs QR tag")).toBeVisible();
-  await expect(page.locator(".ai-overlay g.ai")).not.toHaveCount(0);
-  // Labels carry the model's confidence, e.g. "BOOK 87%".
-  await expect(page.locator(".ai-overlay g.ai text").first()).toHaveText(
-    /^(BOOK|CUP) \d{2,3}%$/,
-  );
-  await page.screenshot({ path: "test-results/ai-book-cup.png", fullPage: true });
+  const list = page.getByLabel("Scanned objects");
+  const progress = page.getByRole("progressbar", { name: "Objects scanned" });
 
-  // AI alone never completes the puzzle: book and cup are seen, keyboard are not.
-  await page.waitForTimeout(3000);
-  await expect(
-    page.getByRole("heading", { name: "Connection restored." }),
-  ).toHaveCount(0);
+  // Two new objects in one frame: nothing is recorded, the player is asked for one.
+  await expect(page.getByText(/IN VIEW — SCAN ONE OBJECT AT A TIME/)).toBeVisible({ timeout: 60_000 });
+  await expect(progress).toHaveAttribute("aria-valuenow", "0");
+  await expect(page.locator(".ai-overlay g.ai text").first()).toHaveText(/^(BOOK|CUP) \d{2,3}%$/);
 
-  await page.evaluate(() => {
-    (window as CameraWindow).showKeyboard = true;
-  });
-  await expect(chips.getByLabel("KEYBOARD: detected by QR tag")).toBeVisible({
-    timeout: 30_000,
-  });
+  // BOOK alone: scanned at once (no hold), with the next object named.
+  await show(page, "book");
+  await expect(list.getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("BOOK SCANNED ✓ — FIND THE CUP")).toBeVisible();
+  await expect(progress).toHaveAttribute("aria-valuenow", "1");
+
+  // The book leaves the frame: it stays scanned.
+  await show(page, "none");
+  await page.waitForTimeout(1500);
+  await expect(list.getByLabel("BOOK: scanned")).toBeVisible();
+
+  // CUP alone, without the book in view.
+  await show(page, "mug");
+  await expect(list.getByLabel("CUP: scanned")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("CUP SCANNED ✓ — FIND THE KEYBOARD")).toBeVisible();
+  await expect(list.getByLabel("BOOK: scanned")).toBeVisible();
+  await expect(list.getByLabel("KEYBOARD: not scanned")).toBeVisible();
+
+  // BOOK again: a duplicate, not new progress.
+  await show(page, "book");
+  await expect(page.getByText("BOOK ALREADY SCANNED")).toBeVisible({ timeout: 30_000 });
+  await expect(progress).toHaveAttribute("aria-valuenow", "2");
+  await page.screenshot({ path: "test-results/ai-sequential-2of3.png", fullPage: true });
+
+  // No keyboard photo fixture yet: finish with the KEYBOARD tag in QR backup. Progress
+  // survives the mode switch, and the AI camera is released first.
+  await page.getByRole("button", { name: "QR backup" }).click();
+  await expect.poll(() => tracksEnded(page)).toBe(true);
+  await expect(page.getByLabel("Scanned objects").getByLabel("CUP: scanned")).toBeVisible();
+  await show(page, "keyboard-tag");
+  await page.getByRole("button", { name: /Enable camera/ }).click();
   await expect(
     page.getByRole("heading", { name: "Connection restored." }),
   ).toBeVisible({ timeout: 60_000 });
@@ -135,6 +158,17 @@ test("real COCO-SSD finds the book and mug, KEYBOARD needs its QR tag, then the 
   await expect(evidence).toContainText("CUP · AI");
   await expect(evidence).toContainText("KEYBOARD · QR");
   await expect.poll(() => tracksEnded(page)).toBe(true);
+});
+
+test("an out-of-sequence first scan is rejected and resets the local attempt", async ({ page }) => {
+  test.setTimeout(150_000);
+  await mockPhotoCamera(page, "mug");
+  await page.goto("/");
+  await page.getByRole("button", { name: "Start AI camera" }).click({ timeout: 60_000 });
+  await expect(page.getByText("CUP SCANNED OUT OF SEQUENCE — START AGAIN")).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("progressbar", { name: "Objects scanned" })).toHaveAttribute("aria-valuenow", "0");
+  await show(page, "book");
+  await expect(page.getByLabel("Scanned objects").getByLabel("BOOK: scanned")).toBeVisible({ timeout: 30_000 });
 });
 
 test("a model that fails to load offers QR Backup immediately", async ({ page }) => {

@@ -24,6 +24,8 @@ export interface ObjectDetector {
   readonly classMap: Readonly<Record<string, MarkerId>>;
   /** Per-class minimum scores for THIS model (scores are not comparable across models). Default: AI_CONFIDENCE. */
   readonly thresholds?: ConfidenceThresholds;
+  /** Stricter per-class scores for one frame to mark an object scanned for good. Default: AI_SCAN_CONFIDENCE. */
+  readonly scanThresholds?: ConfidenceThresholds;
   /** Detects objects in one frame. Boxes are in pixels of `frame`. */
   detect(frame: HTMLCanvasElement): Promise<RawDetection[]>;
 }

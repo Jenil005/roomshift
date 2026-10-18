@@ -2,58 +2,59 @@ import { AiScanner } from "./AiScanner";
 import { ArrowUpRight } from "./components/ArrowUpRight";
 import type { ObjectDetector } from "./detect/ObjectDetector";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { ScanProgress, useScanNotices } from "./ScanProgress";
+import {
+  alreadyScannedText,
+  crowdedText,
+  decideFrame,
+  LocalScanJudge,
+  SCAN_COMPLETE_TEXT,
+} from "./scan/objectScan";
 import {
   MARKER_IDS,
   MARKER_LABEL,
   PHYSICAL_ORDER,
   type DetectedMarker,
+  type EvidenceSource,
   type MarkerId,
+  type ObjectScanReport,
   type PhysicalPuzzleResult,
+  type ScanNotice,
 } from "./types";
-import {
-  PhysicalOrderTracker,
-  toCameraResult,
-  type OrderReading,
-} from "./physicalOrder";
-import { ScanSequence } from "./scan/ScanSequence";
 import { useCameraScanner } from "./useCameraScanner";
 import "./PhysicalPuzzle.css";
-
-const EMPTY_READING: OrderReading = {
-  status: "incomplete",
-  order: [],
-  progress: 0,
-  heldForMs: 0,
-};
-const GUIDANCE = {
-  incomplete:
-    "Keep all three marker cards in view. Low light? Turn on a lamp or move closer.",
-  duplicate: "Use one card per object. A duplicate marker is visible.",
-  unaligned:
-    "Place the cards side by side in a single row, with space between them.",
-  "wrong-order": "All markers found. Revisit the clues and change their order.",
-  unstable:
-    "Movement detected. Hold the objects and camera steady to restart verification.",
-  holding: "Correct arrangement. Hold the camera steady…",
-  verified: "Physical arrangement verified.",
-};
 
 export type ScanMode = "ai" | "qr" | "manual";
 
 /**
- * Emits local evidence; the caller decides how to submit it to the game server.
- * onResult: arrangement held in order (send as `physical`). onScanSequence: the order the
- * QR tags were scanned in (send as `scanned`). Neither is proof; the server decides.
- * Modes: AI Scanner (default; AI for book, cup and keyboard), QR Backup, Manual.
- * onScanningChange(true) while a camera scan is live, so the host can pause heavy rendering
- * (for example RoomScene.stop()) during detection.
- * serverJudged: the game server checks manual reports (the standalone demo has no server, so
- * by default the manual form checks the order itself). onModeChange lets a host remount the
- * scanner (to re-arm it after a rejected submit) in the mode the player chose.
+ * Scan progress owned by a host (the game). `scanned` is what to show as scanned (accepted
+ * by the server plus queued on this phone); `onObjectScanned` gets each newly recognized
+ * object once; `notice` carries the server's verdicts.
+ */
+export type HostScans = {
+  scanned: readonly MarkerId[];
+  pending?: readonly MarkerId[];
+  onObjectScanned: (scan: ObjectScanReport) => void;
+  notice?: ScanNotice | null;
+  paused?: boolean;
+  onRestart?: () => void;
+};
+
+/**
+ * Physical puzzle: scan the book, cup and keyboard one at a time, in the clues' sequence.
+ * Modes: AI Scanner (default, no QR needed), QR Backup (printed tags, same one-at-a-time
+ * rule), Manual report (camera-free, reported as unverified by camera).
+ *
+ * With `scans` the host owns progress and judging (the game server). Without it the
+ * component judges locally for the standalone demo and calls onResult when the sequence is
+ * complete. onResult also carries the manual report in both cases.
+ * onScanningChange(true) while a camera scan is live, so the host can pause heavy rendering.
+ * serverJudged: the game server checks manual reports. onModeChange lets a host remember the
+ * mode the player chose.
  */
 export function PhysicalPuzzle({
   onResult,
-  onScanSequence,
+  scans,
   onScanningChange,
   onModeChange,
   initialMode = "ai",
@@ -61,7 +62,7 @@ export function PhysicalPuzzle({
   serverJudged = false,
 }: {
   onResult: (result: PhysicalPuzzleResult) => void;
-  onScanSequence?: (scanned: MarkerId[]) => void;
+  scans?: HostScans;
   onScanningChange?: (scanning: boolean) => void;
   onModeChange?: (mode: ScanMode) => void;
   initialMode?: ScanMode;
@@ -71,74 +72,19 @@ export function PhysicalPuzzle({
   const [mode, setMode] = useState<ScanMode>(initialMode);
   const manualLabel = serverJudged ? "Manual report" : "Manual demo";
   const [aiLive, setAiLive] = useState(false);
-  const [enabled, setEnabled] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-  const [markers, setMarkers] = useState<DetectedMarker[]>([]);
-  const [reading, setReading] = useState(EMPTY_READING);
-  const tracker = useRef(new PhysicalOrderTracker());
-  const submitted = useRef(false);
-  const sequence = useRef(new ScanSequence());
-  const [scanned, setScanned] = useState<MarkerId[]>([]);
-  const onScan = useCallback(
-    (id: MarkerId) => {
-      if (!sequence.current.append(id)) return;
-      const list = sequence.current.current();
-      setScanned(list);
-      onScanSequence?.(list);
-    },
-    [onScanSequence],
-  );
-  const clearSequence = () => {
-    sequence.current.clear();
-    setScanned([]);
-    onScanSequence?.([]);
-  };
-  const onFrame = useCallback(
-    (detected: DetectedMarker[], now: number) => {
-      if (submitted.current) return;
-      const next = tracker.current.update(detected, now);
-      setMarkers(detected);
-      setReading(next);
-      if (next.status === "verified") {
-        submitted.current = true;
-        setEnabled(false);
-        onResult(toCameraResult(detected, next));
-      }
-    },
-    [onResult],
-  );
-  const camera = useCameraScanner(enabled, onFrame, attempt, onScan);
-  const scanning = mode === "ai" ? aiLive : camera.status === "live";
-  useEffect(() => {
-    onScanningChange?.(scanning);
-  }, [scanning, onScanningChange]);
-  useEffect(() => {
-    if (camera.status === "error") {
-      tracker.current.reset();
-      setMarkers([]);
-      setReading(EMPTY_READING);
-    }
-  }, [camera.status]);
+  const local = useLocalScans(onResult);
+  const progress: HostScans = scans ?? local;
 
-  const clearScan = () => {
-    tracker.current.reset();
-    setMarkers([]);
-    setReading(EMPTY_READING);
-  };
-  // The previous mode's scanner unmounts (or is disabled) first, which releases its camera.
   const switchMode = (next: ScanMode) => {
-    setEnabled(false);
-    clearScan();
     if (next !== "ai") setAiLive(false);
     setMode(next);
     onModeChange?.(next);
   };
-  const start = () => {
-    clearScan();
-    clearSequence();
-    setAttempt((value) => value + 1);
-    setEnabled(true);
-  };
+  const [qrLive, setQrLive] = useState(false);
+  const scanning = mode === "ai" ? aiLive : mode === "qr" && qrLive;
+  useEffect(() => {
+    onScanningChange?.(scanning);
+  }, [scanning, onScanningChange]);
 
   return (
     <section className="scanner-panel" aria-label="Physical puzzle scanner">
@@ -147,9 +93,7 @@ export function PhysicalPuzzle({
           <span className="eyebrow">VISION MODULE / 01</span>
           <h2>Read the room.</h2>
         </div>
-        <span
-          className={`status-tag ${scanning ? "live" : ""}`}
-        >
+        <span className={`status-tag ${scanning ? "live" : ""}`}>
           <span />
           {mode === "manual"
             ? manualLabel.toUpperCase()
@@ -157,189 +101,232 @@ export function PhysicalPuzzle({
               ? aiLive
                 ? "AI LIVE"
                 : "AI SCANNER"
-              : camera.status === "live"
+              : qrLive
                 ? "CAMERA LIVE"
                 : "CAMERA OFF"}
         </span>
       </div>
       <div className="mode-switch" aria-label="Verification method">
-        <button
-          type="button"
-          aria-pressed={mode === "ai"}
-          onClick={() => switchMode("ai")}
-        >
+        <button type="button" aria-pressed={mode === "ai"} onClick={() => switchMode("ai")}>
           AI scanner
         </button>
-        <button
-          type="button"
-          aria-pressed={mode === "qr"}
-          onClick={() => switchMode("qr")}
-        >
+        <button type="button" aria-pressed={mode === "qr"} onClick={() => switchMode("qr")}>
           QR backup
         </button>
-        <button
-          type="button"
-          aria-pressed={mode === "manual"}
-          onClick={() => switchMode("manual")}
-        >
+        <button type="button" aria-pressed={mode === "manual"} onClick={() => switchMode("manual")}>
           {manualLabel}
         </button>
       </div>
+      {/* The previous mode's scanner unmounts first, which releases its camera. */}
       {mode === "ai" ? (
         <AiScanner
-          onResult={onResult}
+          {...progress}
           onSwitchToQr={() => switchMode("qr")}
           onLiveChange={setAiLive}
           loadDetector={loadDetector}
         />
       ) : mode === "qr" ? (
-        <>
-          <div
-            className={`camera-stage ${camera.status === "live" ? "is-live" : ""}`}
-          >
-            <video
-              ref={camera.videoRef}
-              muted
-              playsInline
-              aria-label="Live rear camera feed"
-            />
-            {camera.status === "live" && (
-              <svg
-                className="marker-overlay"
-                viewBox="0 0 1000 1000"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                {markers.map((marker, index) => (
-                  <g key={`${marker.id}-${index}`}>
-                    <polygon
-                      points={marker.corners
-                        .map((p) => `${p.x * 1000},${p.y * 1000}`)
-                        .join(" ")}
-                    />
-                    <text
-                      x={marker.center.x * 1000}
-                      y={Math.max(
-                        36,
-                        Math.min(...marker.corners.map((p) => p.y)) * 1000 - 15,
-                      )}
-                      textAnchor="middle"
-                    >
-                      {MARKER_LABEL[marker.id]}
-                    </text>
-                  </g>
-                ))}
-              </svg>
-            )}
-            {camera.status !== "live" && (
-              <div className="camera-placeholder">
-                <div className="scan-symbol" aria-hidden="true">
-                  ⌗
-                </div>
-                <h3>
-                  {camera.status === "starting"
-                    ? "Connecting to your camera"
-                    : "Your room is the puzzle."}
-                </h3>
-                <p>
-                  {camera.status === "starting"
-                    ? "Allow camera access when your browser asks."
-                    : "Place a marker on each object. Point your camera at all three to reveal their arrangement."}
-                </p>
-                {(camera.status === "idle" || camera.status === "error") && (
-                  <button className="button primary" onClick={start}>
-                    {camera.status === "error"
-                      ? "Try camera again"
-                      : "Enable camera"}{" "}
-                    <span aria-hidden="true">
-                      <ArrowUpRight />
-                    </span>
-                  </button>
-                )}
-              </div>
-            )}
-            {camera.status === "live" && (
-              <div className="camera-caption">
-                <span>KEEP ALL THREE CARDS IN FRAME</span>
-                <span>REAR CAMERA</span>
-              </div>
-            )}
-          </div>
-          {camera.status === "error" && (
-            <p role="alert" className="error-message">
-              {camera.message}
-            </p>
-          )}
-          <div className="scan-feedback">
-            <div className="marker-list" aria-label="Detected objects">
-              {MARKER_IDS.map((id, index) => (
-                <span
-                  key={id}
-                  className={`marker-chip ${markers.some((marker) => marker.id === id) ? "detected" : ""}`}
-                >
-                  <small>0{index + 1}</small>
-                  {MARKER_LABEL[id]}
-                  <span
-                    aria-label={
-                      markers.some((marker) => marker.id === id)
-                        ? "detected"
-                        : "not detected"
-                    }
-                  >
-                    {markers.some((marker) => marker.id === id) ? "●" : "○"}
-                  </span>
-                </span>
-              ))}
-            </div>
-            <p className="guidance" role="status">
-              {camera.status === "live"
-                ? GUIDANCE[reading.status]
-                : "Camera images are processed on your device."}
-            </p>
-            <div
-              className="progress-track"
-              role="progressbar"
-              aria-label="Arrangement stability"
-              aria-valuemin={0}
-              aria-valuemax={100}
-              aria-valuenow={Math.round(reading.progress * 100)}
-            >
-              <div style={{ width: `${reading.progress * 100}%` }} />
-            </div>
-            {scanned.length > 0 && (
-              <p className="scan-sequence" aria-label="Scan order">
-                SCANNED: {scanned.map((id) => MARKER_LABEL[id]).join(" → ")}
-                <button className="text-button" onClick={clearSequence}>
-                  Clear scans
-                </button>
-              </p>
-            )}
-            {camera.status === "live" && camera.torch.supported && (
-              <button
-                className="text-button"
-                aria-pressed={camera.torch.on}
-                onClick={() => void camera.torch.toggle()}
-              >
-                {camera.torch.on ? "Torch off" : "Torch on"}
-              </button>
-            )}
-            {(camera.status === "live" || camera.status === "starting") && (
-              <button
-                className="text-button"
-                onClick={() => {
-                  setEnabled(false);
-                  clearScan();
-                }}
-              >
-                Stop camera
-              </button>
-            )}
-          </div>
-        </>
+        <QrScanner {...progress} onLiveChange={setQrLive} />
       ) : (
         <ManualOrder onResult={onResult} serverJudged={serverJudged} />
       )}
     </section>
+  );
+}
+
+/** Standalone demo: the same one-object-at-a-time sequence rule, judged on this device. */
+function useLocalScans(onResult: (result: PhysicalPuzzleResult) => void): HostScans {
+  const judge = useRef(new LocalScanJudge());
+  const evidence = useRef<Partial<Record<MarkerId, EvidenceSource>>>({});
+  const [scanned, setScanned] = useState<MarkerId[]>([]);
+  const [notice, setNotice] = useState<ScanNotice | null>(null);
+  const onObjectScanned = useCallback(
+    (scan: ObjectScanReport) => {
+      const outcome = judge.current.record(scan.id);
+      if (outcome === "duplicate") return;
+      if (outcome === "wrong") {
+        evidence.current = {};
+        setScanned([]);
+        setNotice({
+          tone: "error",
+          text: `${MARKER_LABEL[scan.id]} SCANNED OUT OF SEQUENCE — START AGAIN`,
+        });
+        return;
+      }
+      evidence.current[scan.id] = scan.evidence;
+      const order = judge.current.current();
+      setScanned(order);
+      if (outcome === "accepted") {
+        setNotice(null);
+        return;
+      }
+      setNotice({ tone: "success", text: SCAN_COMPLETE_TEXT });
+      onResult({
+        solved: true,
+        detectedIds: order,
+        order,
+        source: "camera",
+        evidence: { ...evidence.current },
+      });
+    },
+    [onResult],
+  );
+  const onRestart = useCallback(() => {
+    judge.current.reset();
+    evidence.current = {};
+    setScanned([]);
+    setNotice(null);
+  }, []);
+  return { scanned, onObjectScanned, notice, onRestart };
+}
+
+/** Printed QR tags, scanned one at a time with the same rules as the AI scanner. */
+function QrScanner({
+  scanned,
+  pending,
+  onObjectScanned,
+  notice: hostNotice,
+  paused = false,
+  onRestart,
+  onLiveChange,
+}: HostScans & { onLiveChange: (live: boolean) => void }) {
+  const [enabled, setEnabled] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const [markers, setMarkers] = useState<DetectedMarker[]>([]);
+  const { notice, hint, justScanned } = useScanNotices(scanned, hostNotice);
+  const complete = scanned.length >= MARKER_IDS.length;
+  const latest = useRef({ scanned, paused, complete, onObjectScanned, hint });
+  latest.current = { scanned, paused, complete, onObjectScanned, hint };
+  const lastReport = useRef<{ id: MarkerId; at: number } | null>(null);
+
+  const onFrame = useCallback((detected: DetectedMarker[], now: number) => {
+    setMarkers(detected);
+    const props = latest.current;
+    if (props.paused || props.complete) return;
+    const candidates = [...new Set(detected.map((m) => m.id))].map(
+      (id): ObjectScanReport => ({ id, evidence: "qr" }),
+    );
+    const decision = decideFrame(candidates, props.scanned);
+    if (decision.kind === "report") {
+      const last = lastReport.current;
+      if (last?.id === decision.scan.id && now - last.at < 1_000) return;
+      lastReport.current = { id: decision.scan.id, at: now };
+      props.onObjectScanned(decision.scan);
+    } else if (decision.kind === "duplicate") {
+      props.hint({ tone: "info", text: alreadyScannedText(decision.id) });
+    } else if (decision.kind === "crowded") {
+      props.hint({ tone: "info", text: crowdedText(decision.ids) });
+    } else {
+      props.hint(null);
+    }
+  }, []);
+  const camera = useCameraScanner(enabled, onFrame, attempt);
+  const live = camera.status === "live";
+  useEffect(() => {
+    onLiveChange(live);
+  }, [live, onLiveChange]);
+  useEffect(() => () => onLiveChange(false), [onLiveChange]);
+  useEffect(() => {
+    if (camera.status === "error") setMarkers([]);
+  }, [camera.status]);
+  useEffect(() => {
+    if (complete) {
+      setEnabled(false);
+      setMarkers([]);
+    }
+  }, [complete]);
+
+  const start = () => {
+    setMarkers([]);
+    lastReport.current = null;
+    setAttempt((value) => value + 1);
+    setEnabled(true);
+  };
+
+  return (
+    <>
+      <div className={`camera-stage ${live ? "is-live" : ""}`}>
+        <video ref={camera.videoRef} muted playsInline aria-label="Live rear camera feed" />
+        {live && (
+          <svg className="marker-overlay" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+            {markers.map((marker, index) => (
+              <g key={`${marker.id}-${index}`} className={scanned.includes(marker.id) ? "scanned" : ""}>
+                <polygon points={marker.corners.map((p) => `${p.x * 1000},${p.y * 1000}`).join(" ")} />
+                <text
+                  x={marker.center.x * 1000}
+                  y={Math.max(36, Math.min(...marker.corners.map((p) => p.y)) * 1000 - 15)}
+                  textAnchor="middle"
+                >
+                  {MARKER_LABEL[marker.id]}
+                  {scanned.includes(marker.id) ? " ✓" : ""}
+                </text>
+              </g>
+            ))}
+          </svg>
+        )}
+        {!live && (
+          <div className="camera-placeholder">
+            <div className="scan-symbol" aria-hidden="true">
+              {complete ? "✓" : "⌗"}
+            </div>
+            <h3>
+              {complete
+                ? "All three objects scanned."
+                : camera.status === "starting"
+                  ? "Connecting to your camera"
+                  : "Scan one tag at a time."}
+            </h3>
+            <p>
+              {complete
+                ? "The camera is off. The facility is checking the sequence."
+                : camera.status === "starting"
+                  ? "Allow camera access when your browser asks."
+                  : "Place a printed tag on each object, then point the camera at one tag at a time."}
+            </p>
+            {!complete && (camera.status === "idle" || camera.status === "error") && (
+              <button className="button primary" onClick={start}>
+                {camera.status === "error" ? "Try camera again" : "Enable camera"}{" "}
+                <span aria-hidden="true">
+                  <ArrowUpRight />
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+        {live && (
+          <div className="camera-caption">
+            <span>ONE TAG AT A TIME</span>
+            <span>REAR CAMERA</span>
+          </div>
+        )}
+      </div>
+      {camera.status === "error" && (
+        <p role="alert" className="error-message">
+          {camera.message}
+        </p>
+      )}
+      <ScanProgress
+        scanned={scanned}
+        pending={pending}
+        notice={notice}
+        idleText={complete ? "ALL OBJECTS SCANNED" : live ? (paused ? "BREAKER RESETTING" : "POINT AT ONE TAG") : "QR BACKUP"}
+        justScanned={justScanned}
+        onRestart={onRestart}
+      />
+      <p className="guidance" role="status">
+        {live ? "Scanned objects stay scanned. Low light? Turn on a lamp or move closer." : "Camera images are processed on your device."}
+      </p>
+      {live && camera.torch.supported && (
+        <button className="text-button" aria-pressed={camera.torch.on} onClick={() => void camera.torch.toggle()}>
+          {camera.torch.on ? "Torch off" : "Torch on"}
+        </button>
+      )}
+      {(live || camera.status === "starting") && (
+        <button className="text-button" onClick={() => setEnabled(false)}>
+          Stop camera
+        </button>
+      )}
+    </>
   );
 }
 
@@ -362,46 +349,37 @@ function ManualOrder({
           return;
         }
         if (!serverJudged && order.some((id, index) => id !== PHYSICAL_ORDER[index])) {
-          setMessage(
-            "That order does not match the clues. Try rearranging the objects.",
-          );
+          setMessage("That sequence does not match the clues. Compare clues and try again.");
           return;
         }
         setMessage(serverJudged ? "Report sent. Waiting for the facility to check it…" : "");
         onResult({
           // With a server, `solved` is only the client's guess and is ignored there.
           solved: !serverJudged,
-          markers: [],
           detectedIds: [],
           order: order as MarkerId[],
           source: "manual",
-          heldForMs: 0,
           evidence: { book: "manual", cup: "manual", keyboard: "manual" },
         });
       }}
     >
       <span className="eyebrow">CAMERA-FREE FALLBACK</span>
-      <h3>Arrange. Then report.</h3>
+      <h3>Decide the sequence. Then report.</h3>
       <p>
-        Arrange the real objects using the clues, then enter their order from
-        left to right.{" "}
+        Use the clues to choose the scan sequence, first to last.{" "}
         {serverJudged
           ? "This is a manual report, recorded as unverified by camera."
           : "This is a manual demo; it does not verify the physical scene."}
       </p>
       <div className="manual-slots">
-        {["Left", "Middle", "Right"].map((position, index) => (
+        {["First", "Second", "Third"].map((position, index) => (
           <label key={position}>
             {position}
             <select
               required
               value={order[index]}
               onChange={(event) => {
-                setOrder((current) =>
-                  current.map((id, i) =>
-                    i === index ? event.target.value : id,
-                  ),
-                );
+                setOrder((current) => current.map((id, i) => (i === index ? event.target.value : id)));
                 setMessage("");
               }}
             >
@@ -419,7 +397,7 @@ function ManualOrder({
         {message}
       </p>
       <button className="button primary" type="submit">
-        Check arrangement <span aria-hidden="true">→</span>
+        Report sequence <span aria-hidden="true">→</span>
       </button>
     </form>
   );

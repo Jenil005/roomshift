@@ -1,4 +1,4 @@
-import { COCO_CLASS_MAP, type RawDetection } from "./objectClasses";
+import { AI_SCAN_CONFIDENCE, COCO_CLASS_MAP, type RawDetection } from "./objectClasses";
 import { DetectorError, type ObjectDetector } from "./ObjectDetector";
 
 // Self-hosted model (ar/public/models/coco-ssd/, Apache-2.0). Never fetched from a CDN at runtime.
@@ -68,6 +68,7 @@ async function load(modelUrl: string): Promise<Loaded> {
   const detector: ObjectDetector = {
     name: "COCO-SSD lite_mobilenet_v2",
     classMap: COCO_CLASS_MAP,
+    scanThresholds: AI_SCAN_CONFIDENCE,
     async detect(frame) {
       if (released) return [];
       // coco-ssd disposes its own intermediate tensors; the canvas is read once and discarded.

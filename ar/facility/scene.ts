@@ -21,6 +21,7 @@ export interface FacilityState {
   door: boolean;
   phase: string;
   draft: readonly string[]; // shared boot order (puzzle 2)
+  scanned?: readonly string[]; // puzzle 1 objects scanned so far (lights their stations)
   modules: readonly { id: string; label: string }[];
   holding: number; // players holding the final panel
   players: number; // connected players
@@ -445,7 +446,7 @@ export function createFacility({ quality = "high" }: { quality?: FacilityQuality
     coreLabel.set(next.breaker ? "CORE ONLINE" : "CORE OFFLINE", next.breaker ? "#a6ffcf" : "#ff7a6a");
     for (const s of stationDefs) {
       const mat = stationLamps[s.id].material as THREE.MeshStandardMaterial;
-      mat.emissive.set(next.breaker ? 0x45ff8a : 0xffa425);
+      mat.emissive.set(next.breaker || next.scanned?.includes(s.id) ? 0x45ff8a : 0xffa425);
     }
     termHeader.set(
       next.terminal ? "COMMS ONLINE" : next.breaker ? "COMMS BOOT ORDER" : "TERMINAL · NO POWER",
