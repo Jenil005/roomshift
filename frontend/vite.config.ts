@@ -24,6 +24,9 @@ export default defineConfig({
   server: {
     // Quick tunnels get a new random subdomain on every start; allow them all.
     allowedHosts: ['.trycloudflare.com'],
+    // Local backend (`npx deepspace dev start --port 8787` in ../backend), used when
+    // VITE_API_ORIGIN=self: phones then reach it through the same tunnel as the page.
+    proxy: { '/api': { target: 'http://localhost:8787', changeOrigin: true } },
     fs: { allow: [fromHere('..')] },
   },
   // Second page: tester diagnostics (detector load/inference timing on the real device).

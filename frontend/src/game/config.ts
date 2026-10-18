@@ -12,7 +12,9 @@ export const CLIENT_MODE: ClientMode =
       : "live";
 
 /** Origin of the DeepSpace game API. No secrets: the API is public and token-based. */
-export const API_ORIGIN: string = import.meta.env.VITE_API_ORIGIN || "https://roomshift.app.space";
+// "self" means this page's own origin: in dev, Vite proxies /api to a local backend (vite.config.ts).
+export const API_ORIGIN: string =
+  import.meta.env.VITE_API_ORIGIN === "self" ? location.origin : import.meta.env.VITE_API_ORIGIN || "https://roomshift.app.space";
 
 /** Number of local-demo bots (?bots=1..3). */
 export const DEMO_BOTS = Math.max(1, Math.min(3, Number(new URLSearchParams(location.search).get("bots") ?? 2) || 2));
