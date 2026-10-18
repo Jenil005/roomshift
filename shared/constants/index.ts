@@ -36,10 +36,9 @@ export const DISCONNECT_AFTER_MS = 15_000;
 // A player who stays disconnected this long in LOBBY/READY is removed (no ghost players).
 export const LOBBY_DROP_AFTER_MS = 60_000;
 
-// INTRO (role reveal) has no timer: it lasts until the host proceeds (intro:skip).
-
-// Mission countdown shown in the HUD, from the start of PUZZLE_1. Client-side only: the
-// server has no deadline and nothing fails when it reaches zero.
+// INTRO (role reveal) never auto-advances: the host sends intro:skip ("Proceed") to start PUZZLE_1.
+// The mission countdown starts at that moment (Room.mission / Room.missionStartedAt) and runs
+// this long; the host may pause it (demo:pause). Display only: 00:00 does not fail the mission.
 export const MISSION_DURATION_MS = 8 * 60_000;
 
 // PUZZLE_1_COMPLETE / PUZZLE_2_COMPLETE show their success state this long, then advance.

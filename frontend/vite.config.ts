@@ -22,6 +22,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', 'three', 'jsqr', '@tensorflow/tfjs-core', '@tensorflow/tfjs-converter', '@tensorflow/tfjs-backend-webgl', '@tensorflow/tfjs-backend-cpu', '@tensorflow-models/coco-ssd', '@mediapipe/tasks-vision'],
   },
   server: {
+    // Quick tunnels get a new random subdomain on every start; allow them all.
     allowedHosts: ['.trycloudflare.com'],
     fs: { allow: [fromHere('..')] },
   },

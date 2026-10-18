@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import type { MissionClock } from "@shared/types";
 
-/** Server-synced "now", ticking once a second (stepped, like the rest of the HUD). */
+/** Server-synced "now". Ticks 4x a second so phones flip the shown second within ~250 ms of each other. */
 export function useServerNow(offset: number) {
   const [now, setNow] = useState(() => Date.now() + offset);
   useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now() + offset), 1000);
+    const id = window.setInterval(() => setNow(Date.now() + offset), 250);
     return () => clearInterval(id);
   }, [offset]);
   return now;
@@ -26,12 +26,17 @@ export function useSecondsUntil(at: number | undefined | null): number {
   return at ? Math.max(0, Math.ceil((at - now) / 1000)) : 0;
 }
 
-/** Milliseconds left on the mission clock at server time `now` (stops while paused). */
-export function timeLeft(clock: MissionClock, now: number) {
-  const elapsed = (clock.pausedAt ?? now) - clock.startedAt - clock.pausedMs;
-  return Math.max(0, clock.durationMs - elapsed);
+/** Countdown left at server time `now` for a timer started at `startedAt`; never negative. */
+export function missionRemainingMs(startedAt: number, now: number, durationMs: number) {
+  return Math.max(0, Math.min(durationMs, startedAt + durationMs - now));
 }
 
+/** Milliseconds left on the mission clock at server time `now`; stops while paused. */
+export function timeLeft(clock: MissionClock, now: number) {
+  return missionRemainingMs(clock.startedAt + clock.pausedMs, clock.pausedAt ?? now, clock.durationMs);
+}
+
+/** MM:SS, rounding partial seconds up (so a fresh 8-minute countdown reads 08:00); never negative. */
 export function formatClock(ms: number) {
   const total = Math.max(0, Math.ceil(ms / 1000));
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;

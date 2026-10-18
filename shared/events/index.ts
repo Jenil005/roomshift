@@ -14,7 +14,7 @@ export type ClientEvent =
   | { type: "puzzle1:restart" } // clears the team's puzzle 1 scan progress (not a failed attempt)
   | { type: "player:heartbeat" } // every HEARTBEAT_INTERVAL_MS while the page is open
   | { type: "room:me" } // returns the caller's PrivateClue
-  | { type: "intro:skip" } // host only, INTRO -> PUZZLE_1 (the role reveal's "Proceed")
+  | { type: "intro:skip" } // host only: "Proceed" from role reveal, INTRO -> PUZZLE_1, starts the countdown
   | { type: "puzzle2:draft"; order: string[] }
   | { type: "final:press"; held: boolean }
   | { type: "final:force" } // host only, after FINAL_FORCE_AFTER_MS in FINAL_SEQUENCE

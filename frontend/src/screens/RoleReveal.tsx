@@ -4,7 +4,7 @@ import { Button, Label, Screen } from "../ui/kit";
 import { ServerError } from "../ui/ServerError";
 import { FacilityButton } from "../ui/FacilityButton";
 
-/** INTRO: the server deals roles and puzzle 1 clues, then waits for the host to proceed. */
+/** INTRO: the server deals roles and puzzle 1 clues, then waits for the host to proceed (no timer). */
 export function RoleReveal() {
   const { room, clue, send, pending } = useGame();
   const me = useMe();
@@ -38,7 +38,7 @@ export function RoleReveal() {
       {me?.isHost ? (
         <Button disabled={pending === "intro:skip"} onClick={() => void send({ type: "intro:skip" })}>Proceed</Button>
       ) : (
-        <p className="m-0 text-center text-emergency" role="status">Waiting for the host to proceed…</p>
+        <p className="m-0 text-center text-emergency" role="status">Waiting for host to proceed...</p>
       )}
     </Screen>
   );

@@ -7,8 +7,8 @@ export function Complete() {
   const { room, send } = useGame();
   const me = useMe();
   if (!room) return null;
-  const started = room.events.find((e) => e.type === "game:advance" && e.to === "INTRO")?.at;
-  const took = started ? formatClock(room.phaseStartedAt - started) : "--:--";
+  // COMPLETE's phaseStartedAt is the win moment; the mission began when the host proceeded.
+  const took = room.missionStartedAt ? formatClock(room.phaseStartedAt - room.missionStartedAt) : "--:--";
 
   return (
     // The only light screen in the game: every phone flips at once.

@@ -173,17 +173,89 @@ describe('private clues', () => {
 })
 
 describe('timers', () => {
-  it('INTRO waits for the host to proceed', () => {
+  it('INTRO never auto-advances and schedules no intro alarm', () => {
     const g = startedGame()
-    expect(nextDeadline(g.state)).toBe(T0 + DISCONNECT_AFTER_MS + 1) // presence only, no intro timer
-    g.advance(60_000)
-    g.run({ type: 'tick' })
+    // Only presence / idle deadlines remain, never an intro deadline.
+    expect(nextDeadline(g.state)).toBe(T0 + DISCONNECT_AFTER_MS + 1)
+    for (let i = 0; i < 10; i++) {
+      g.advance(DISCONNECT_AFTER_MS - 1)
+      g.run({ type: 'player:heartbeat', tokenHash: 'h0' })
+      g.run({ type: 'player:heartbeat', tokenHash: 'h1' })
+      g.run({ type: 'tick' })
+    }
     expect(g.state!.phase).toBe('INTRO')
+    expect(toView(g.state!).missionStartedAt).toBeUndefined() // no countdown during role reveal
+  })
 
-    const s = startedGame()
-    expect(s.run({ type: 'intro:skip', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'not_host' })
-    expect(s.run({ type: 'intro:skip', tokenHash: 'h0' }).result.ok).toBe(true)
-    expect(s.state!.phase).toBe('PUZZLE_1')
+  it('only the host can proceed from INTRO; proceeding starts the mission countdown', () => {
+    const g = startedGame()
+    g.advance(5_000)
+    expect(g.run({ type: 'intro:skip', tokenHash: 'h1' }).result).toMatchObject({ ok: false, code: 'not_host' })
+    expect(g.state!.phase).toBe('INTRO')
+    expect(g.state!.missionStartedAt).toBeFalsy()
+    const out = g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    expect(out.result).toMatchObject({ ok: true, data: { room: { phase: 'PUZZLE_1', missionStartedAt: T0 + 5_000 } } })
+    expect(g.state!.phase).toBe('PUZZLE_1')
+    // A duplicate press (double tap, retried request) does not restart the countdown.
+    g.advance(1_000)
+    expect(g.run({ type: 'intro:skip', tokenHash: 'h0' }).result).toMatchObject({ ok: false, code: 'wrong_phase' })
+    expect(toView(g.state!).missionStartedAt).toBe(T0 + 5_000)
+  })
+
+  it('a handed-off host can proceed, and the old host no longer can', () => {
+    // The host's phone goes silent during role reveal while player 2 keeps a heartbeat.
+    const introHostGone = () => {
+      const g = startedGame()
+      for (let t = 0; t <= HOST_HANDOFF_AFTER_MS; t += 5_000) {
+        g.advance(5_000)
+        g.run({ type: 'player:heartbeat', tokenHash: 'h1' })
+      }
+      return g
+    }
+    const g = introHostGone()
+    expect(g.state!.hostId).toBe('p1')
+    expect(g.state!.phase).toBe('INTRO')
+    expect(g.run({ type: 'intro:skip', tokenHash: 'h1' }).result.ok).toBe(true)
+    expect(g.state!.phase).toBe('PUZZLE_1')
+
+    // The old host comes back: no longer host, so they cannot proceed.
+    const s = introHostGone()
+    expect(s.run({ type: 'intro:skip', tokenHash: 'h0' }).result).toMatchObject({ ok: false, code: 'not_host' })
+    expect(s.state!.phase).toBe('INTRO')
+  })
+
+  it('the mission start is the same for every player, survives rejoin, and resets with the game', () => {
+    const g = startedGame()
+    g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    const started = T0
+    g.advance(90_000)
+    const a = g.run({ type: 'player:heartbeat', tokenHash: 'h0' }).result
+    const b = g.run({ type: 'player:heartbeat', tokenHash: 'h1' }).result
+    expect(a).toMatchObject({ ok: true, data: { room: { missionStartedAt: started } } })
+    expect(b).toMatchObject({ ok: true, data: { room: { missionStartedAt: started } } })
+    // Page refresh: rejoin with the stored token, then the unauthenticated poll.
+    const re = g.run({ type: 'room:join', playerId: 'px', playerName: 'Bea', tokenHash: 'hx', rejoinTokenHash: 'h1' })
+    expect(re.result).toMatchObject({ ok: true, data: { rejoined: true, room: { missionStartedAt: started } } })
+    expect(g.run({ type: 'room:view' }).result).toMatchObject({ ok: true, data: { room: { missionStartedAt: started } } })
+    // It lives on the state, so it outlives the bounded event list.
+    for (let i = 0; i < 15; i++) {
+      g.run({ type: 'puzzle1:scan', tokenHash: 'h0', scan: { object: 'book', source: 'qr' } })
+      g.run({ type: 'puzzle1:restart', tokenHash: 'h0' })
+    }
+    const view = toView(g.state!)
+    expect(view.events.some((e) => e.type === 'game:advance' && e.to === 'PUZZLE_1')).toBe(false)
+    expect(view.missionStartedAt).toBe(started)
+
+    g.run({ type: 'game:reset', tokenHash: 'h0' })
+    expect(toView(g.state!).missionStartedAt).toBeUndefined()
+    g.run({ type: 'room:ready', tokenHash: 'h0', ready: true })
+    g.run({ type: 'room:ready', tokenHash: 'h1', ready: true })
+    g.run({ type: 'game:start', tokenHash: 'h0' })
+    expect(toView(g.state!).missionStartedAt).toBeUndefined()
+    g.advance(2_000)
+    g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    expect(toView(g.state!).missionStartedAt).toBe(started + 90_000 + 2_000)
+    expect(MISSION_DURATION_MS).toBe(8 * 60_000)
   })
 
   it('marks silent players disconnected and reconnects them on their next request', () => {
@@ -530,9 +602,11 @@ describe('room:view', () => {
     expect(JSON.stringify(out.result)).not.toContain('h0')
   })
 
-  it('still applies timers, so a poll can observe a timed phase ending', () => {
-    const g = atPuzzle1()
-    scanAll(g)
+  it('still applies timers, so a poll can observe a complete-hold ending', () => {
+    const g = startedGame()
+    g.run({ type: 'intro:skip', tokenHash: 'h0' })
+    g.run({ type: 'puzzle:submit', tokenHash: 'h0', puzzle: 1, manualCode: 'BCK' })
+    expect(g.state!.phase).toBe('PUZZLE_1_COMPLETE')
     g.advance(PHASE_COMPLETE_HOLD_MS)
     expect(g.run({ type: 'room:view' }).result).toMatchObject({ ok: true, data: { room: { phase: 'PUZZLE_2' } } })
   })

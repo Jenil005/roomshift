@@ -92,6 +92,8 @@ export interface GameState {
   missionId: string
   createdAt: number
   phaseStartedAt: number
+  // Set when the host proceeds from INTRO. Optional: rooms stored before the countdown existed have none.
+  missionStartedAt?: number | null
   lastActivity: number
   version: number
   seq: number
@@ -146,7 +148,7 @@ export type EngineCommand =
   | ({ type: 'demo:pause'; paused: boolean } & Authed)
   | ({ type: 'demo:win' } & Authed)
   | ({ type: 'demo:fail' } & Authed)
-  | { type: 'tick' } // timers: presence, auto-advance, idle cleanup
+  | { type: 'tick' } // timers: presence, host handoff, complete-hold advance, idle cleanup
   | { type: 'room:view' } // unauthenticated read of the public view (GET /api/game/room/:code)
   | { type: 'narration:set'; phase: GamePhase; text: string } // internal only: Gemini result
 
@@ -194,6 +196,7 @@ export function toView(state: GameState): Room {
     hostId: state.hostId,
     missionId: state.missionId,
     phaseStartedAt: state.phaseStartedAt,
+    ...(state.missionStartedAt ? { missionStartedAt: state.missionStartedAt } : {}),
     systems: state.systems,
     puzzles: state.puzzles,
     version: state.version,
@@ -292,6 +295,7 @@ function enterFinal(state: GameState, now: number): void {
 /** INTRO -> PUZZLE_1: the mission clock starts here. */
 function startPuzzle1(state: GameState, now: number): void {
   state.mission = { startedAt: now, durationMs: MISSION_DURATION_MS, pausedMs: 0 }
+  state.missionStartedAt = now // the plain start time, for clients that read only that
   setPhase(state, 'PUZZLE_1', now)
 }
 
@@ -583,6 +587,7 @@ function apply(
       state.puzzle2 = null
       state.final = null
       state.mission = null
+      state.missionStartedAt = null
       setPhase(state, 'LOBBY', now)
       recomputeLobby(state, now)
       state.narration = FALLBACK_NARRATION[state.phase]
@@ -590,9 +595,10 @@ function apply(
       return { state, result: ok(room()) }
     }
 
+    // "Proceed" on role reveal: the only way out of INTRO. Starts the mission countdown.
     case 'intro:skip': {
       if (!isHost) return { state, result: fail('not_host', 'Only the host can proceed') }
-      if (state.phase !== 'INTRO') return { state, result: fail('wrong_phase', 'The intro is not playing') }
+      if (state.phase !== 'INTRO') return { state, result: fail('wrong_phase', 'The role reveal is over') }
       startPuzzle1(state, now)
       return { state, result: ok(room()) }
     }

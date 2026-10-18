@@ -15,7 +15,7 @@ import fs from 'node:fs'
 
 const BASE = (process.argv[2] ?? 'http://localhost:5173').replace(/\/$/, '')
 const APP_ID = fs.readFileSync(new URL('../../wrangler.toml', import.meta.url), 'utf8').match(/DEEPSPACE_APP_ID\s*=\s*"([^"]+)"/)[1]
-const INTRO_MS = 8000
+const MISSION_MS = 8 * 60_000 // shared/constants MISSION_DURATION_MS
 
 let failures = 0
 const check = (cond, label, extra) => {
@@ -133,7 +133,6 @@ async function main() {
   check((await api({ type: 'game:start', code, playerToken: tokB })).code === 'not_host', 'non-host start -> not_host')
   const s = await api({ type: 'game:start', code, playerToken: tokA })
   check(s.ok && s.data.room.phase === 'INTRO', 'host starts -> INTRO', s)
-  const startedAt = Date.now()
   check((await api({ type: 'game:start', code, playerToken: tokA })).code === 'wrong_phase', 'duplicate start -> wrong_phase')
   check((await api({ type: 'room:join', code, playerName: 'Late' })).code === 'game_started', 'join after start -> game_started')
 
@@ -152,10 +151,23 @@ async function main() {
   const re = await api({ type: 'room:join', code, playerName: 'Bea', playerToken: tokB })
   check(re.ok && re.data.playerId === b.data.playerId && re.data.playerToken === tokB, 'rejoin with token restores the same player', re)
 
-  // --- intro auto-advance by server alarm (no requests during the wait) ---
-  await sleep(Math.max(0, INTRO_MS - (Date.now() - startedAt)))
-  await waitFor(() => live.latest?.phase === 'PUZZLE_1', 'server alarm advances INTRO -> PUZZLE_1 with no client requests', 6000)
-  check(live.latest?.phase === 'PUZZLE_1', 'live view shows PUZZLE_1')
+  // --- role reveal waits for the host (no auto-advance), then the countdown starts ---
+  check(!s.data.room.missionStartedAt, 'no mission countdown during role reveal', s.data.room)
+  await sleep(9000) // longer than the old 8 s intro timer
+  const still = await api({ type: 'player:heartbeat', code, playerToken: tokB })
+  check(still.ok && still.data.room.phase === 'INTRO', 'INTRO does not auto-advance', still)
+  check((await api({ type: 'intro:skip', code, playerToken: tokB })).code === 'not_host', 'non-host proceed -> not_host')
+  const go = await api({ type: 'intro:skip', code, playerToken: tokA })
+  check(go.ok && go.data.room.phase === 'PUZZLE_1', 'host proceed -> PUZZLE_1', go)
+  const missionStartedAt = go.data?.room?.missionStartedAt
+  check(typeof missionStartedAt === 'number' && Math.abs(Date.now() - missionStartedAt) < 30_000, 'mission start stamped by the server', go.data?.room)
+  check((await api({ type: 'intro:skip', code, playerToken: tokA })).code === 'wrong_phase', 'duplicate proceed -> wrong_phase')
+  await waitFor(() => live.latest?.phase === 'PUZZLE_1', 'live view shows PUZZLE_1')
+  check(live.latest?.missionStartedAt === missionStartedAt, 'live view carries the same mission start', live.latest)
+  const reB = await api({ type: 'room:join', code, playerName: 'Bea', playerToken: tokB })
+  check(reB.ok && reB.data.room.missionStartedAt === missionStartedAt, 'rejoin keeps the mission start (no reset on refresh)', reB.data?.room)
+  const left = missionStartedAt + MISSION_MS - Date.now()
+  check(left > 0 && left <= MISSION_MS, 'countdown is below 08:00 and above 00:00 once running', left)
 
   // --- puzzle 1: objects scanned one at a time (fake scanner requests) ---
   const scan1 = (object, confidence = 0.8, token = tokB) =>
@@ -233,6 +245,7 @@ async function main() {
   check((await api({ type: 'game:reset', code, playerToken: tokB })).code === 'not_host', 'non-host reset -> not_host')
   const reset = await api({ type: 'game:reset', code, playerToken: tokA })
   check(reset.ok && reset.data.room.phase === 'LOBBY' && !reset.data.room.systems.door, 'host reset -> LOBBY, systems off', reset)
+  check(reset.ok && reset.data.room.missionStartedAt === undefined, 'host reset clears the mission countdown', reset.data?.room)
   await waitFor(() => live.latest?.phase === 'LOBBY', 'live view shows LOBBY after reset')
 
   // --- per-player rate limit: a burst from one phone is throttled, others are not ---

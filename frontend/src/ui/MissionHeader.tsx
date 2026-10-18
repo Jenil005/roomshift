@@ -6,24 +6,22 @@ import { FacilityButton } from "./FacilityButton";
 import { LifeBar } from "./LifeBar";
 import { timeLeft, useServerNow } from "./time";
 
-// Fallback for a backend without `room.mission`: the clock starts at the PUZZLE_1 advance
-// event. Room events are bounded, so remember each room's start once seen (lost on reload).
-const startedAt = new Map<string, number>();
-function fallbackClock(room: Room): MissionClock | undefined {
-  const seen = room.events.find((e) => e.type === "game:advance" && e.to === "PUZZLE_1")?.at;
-  if (seen) startedAt.set(room.code, seen);
-  const start = startedAt.get(room.code);
-  return start ? { startedAt: start, durationMs: MISSION_DURATION_MS, pausedMs: 0 } : undefined;
+/** The server's mission clock; a backend without one (no pause) sends only missionStartedAt. */
+function missionClock(room: Room): MissionClock | undefined {
+  if (room.mission) return room.mission;
+  return room.missionStartedAt ? { startedAt: room.missionStartedAt, durationMs: MISSION_DURATION_MS, pausedMs: 0 } : undefined;
 }
 
 /**
- * Step + title + this player's role. The LIFE bar shows the server's mission clock, which
- * starts with puzzle 1 and can be paused by the host. Reaching zero only turns the bar red.
+ * Step + title + this player's role. The LIFE bar counts down the server's mission clock,
+ * which starts when the host proceeds from the role reveal and may be paused by the host, so
+ * every phone, reload and screen switch shows the same time. Display only: 00:00 does not
+ * end the mission.
  */
 export function MissionHeader({ step, title }: { step: string; title: string }) {
   const { room, clue, serverTimeOffset } = useGame();
   const now = useServerNow(serverTimeOffset);
-  const clock = room ? (room.mission ?? fallbackClock(room)) : undefined;
+  const clock = room ? missionClock(room) : undefined;
   return (
     <header className="flex flex-col gap-2">
       <div className="flex items-center gap-2">

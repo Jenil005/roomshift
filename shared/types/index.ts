@@ -84,6 +84,9 @@ export interface Room {
   hostId: string;
   missionId: string;
   phaseStartedAt: number; // server epoch ms when the current phase began
+  // Server epoch ms when the host proceeded from INTRO to PUZZLE_1; the mission countdown
+  // runs MISSION_DURATION_MS from here. Absent in LOBBY/READY/INTRO; cleared by game:reset.
+  missionStartedAt?: number;
   systems: SystemsState;
   puzzles: { 1: PuzzleProgress; 2: PuzzleProgress };
   version: number; // increments on every state change
