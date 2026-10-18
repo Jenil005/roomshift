@@ -1,65 +1,68 @@
-import { useState } from "react";
-import { useGame } from "../game/GameProvider";
-import { OBJECT_LABEL } from "../game/content";
-import type { ObjectId } from "../shared/types";
-import { Button, ErrorLine, PowerBar, Screen } from "../ui/kit";
+import { useCallback, useEffect, useState } from "react";
+import type { SubmitData } from "@shared/events";
+import { PhysicalPuzzle, type ScanMode } from "../../../ar/PhysicalPuzzle";
+import { loadPreferredDetector, releaseDetectors } from "../../../ar/detect/selectDetector";
+import type { PhysicalPuzzleResult } from "../../../ar/types";
+import { powerPercent } from "../game/content";
+import { toPuzzle1Submission } from "../game/evidence";
+import { useGame } from "../game/useGame";
+import { PowerBar, Screen } from "../ui/kit";
 import { MissionHeader } from "../ui/MissionHeader";
-import { CameraView } from "../ui/CameraView";
+import { ServerError } from "../ui/ServerError";
+import { useSecondsUntil } from "../ui/time";
 
-const OBJECTS: ObjectId[] = ["BOOK", "CUP", "KEYS"];
+/**
+ * Puzzle 1. One scanner owns the camera (AI, QR backup, or manual report, all inside
+ * ar/PhysicalPuzzle). Its local verdict is never trusted: the evidence goes to the server,
+ * which re-derives the order from marker positions and checks the hold time.
+ */
+// COCO-SSD by default; ?detector=mediapipe or ?detector=auto selects MediaPipe (see selectDetector).
+const loadDetector = () => loadPreferredDetector();
 
 export function Puzzle1() {
-  const { state, briefing, send } = useGame();
-  const [manual, setManual] = useState(false);
-  const [order, setOrder] = useState<ObjectId[]>([]);
-  if (!state || !briefing) return null;
+  const { room, clue, send, lastSubmit } = useGame();
+  const [mode, setMode] = useState<ScanMode>("ai");
+  const [armed, setArmed] = useState(0); // remounting the scanner re-arms it after a rejection
+  const [checking, setChecking] = useState(false);
+  const retry = useSecondsUntil(lastSubmit?.puzzle === 1 ? lastSubmit.retryAt : null);
 
-  const tap = (id: ObjectId) => setOrder((o) => (o.includes(id) ? o.filter((x) => x !== id) : [...o, id]));
-  const submit = () => {
-    send({ type: "puzzle:submit", puzzle: 1, result: { solved: order.length === 3, detectedIds: order, order } });
-    setOrder([]);
-  };
+  // Free the detector's GPU memory once the puzzle is behind us.
+  useEffect(() => () => releaseDetectors(), []);
+
+  const onResult = useCallback(
+    async (result: PhysicalPuzzleResult) => {
+      setChecking(true);
+      const res = await send({ type: "puzzle:submit", submission: toPuzzle1Submission(result) });
+      setChecking(false);
+      if (!(res.ok && (res.data as SubmitData).solved)) setArmed((n) => n + 1);
+    },
+    [send],
+  );
+  if (!room) return null;
+  const rejected = lastSubmit?.puzzle === 1 && !lastSubmit.solved;
 
   return (
     <Screen className="ar-screen">
-      <MissionHeader step="Puzzle 1 of 3" title="Physical order" role={briefing.title} />
+      <MissionHeader step="Puzzle 1 of 3" title="Breaker: physical order" />
       <p className="ar-clue m-0 bg-inset p-3 bevel-sunken">
-        <span className="text-label">Your fragment: </span>{briefing.puzzle1Clue}
+        <span className="text-label">Your fragment: </span>{clue?.clues.join(" ") ?? "Receiving…"}
       </p>
+      <p className="ar-instruction m-0">Arrange the book, cup and keys on a table, left to right, then let the scanner read them.</p>
 
-      {!manual ? (
-        <>
-          <CameraView onResult={(result) => send({ type: "puzzle:submit", puzzle: 1, result })} />
-          <p className="ar-instruction m-0">Arrange the objects on the table, then point the camera at them, left to right.</p>
-        </>
+      {checking && <p role="status" className="m-0 text-phosphor">Evidence sent. The facility is checking it…</p>}
+      {rejected && !checking && (
+        <p role="alert" className="m-0 text-emergency">
+          {lastSubmit.reason ?? "Arrangement rejected"}.{retry > 0 ? ` Breaker resetting ${retry}s.` : " Compare your fragments and try again."}
+        </p>
+      )}
+      <ServerError actions={["puzzle:submit"]} />
+      {retry > 0 ? (
+        <p className="m-0 bg-inset p-4 text-center text-emergency bevel-sunken">Breaker resetting… {retry}s</p>
       ) : (
-        <>
-          <p className="m-0">Tap the objects in the order they sit on the table, left to right.</p>
-          <div className="grid grid-cols-3 gap-2">
-            {OBJECTS.map((id) => {
-              const pos = order.indexOf(id);
-              return (
-                <button
-                  key={id}
-                  onClick={() => tap(id)}
-                  className={`flex h-20 flex-col items-center justify-center bg-inset font-display text-[20px] ${pos >= 0 ? "border-[3px] border-phosphor text-phosphor" : "border-[3px] border-dashed border-emergency text-emergency"}`}
-                >
-                  {OBJECT_LABEL[id]}
-                  <span className="font-body text-[18px]">{pos >= 0 ? `#${pos + 1}` : "—"}</span>
-                </button>
-              );
-            })}
-          </div>
-          <Button disabled={order.length !== 3} onClick={submit}>Submit sequence</Button>
-        </>
+        <PhysicalPuzzle key={armed} initialMode={mode} onModeChange={setMode} onResult={onResult} loadDetector={loadDetector} serverJudged />
       )}
 
-      <ErrorLine message={state.lastError} />
-      <div className="flex-1" />
-      <PowerBar value={state.power} />
-      <Button variant="ghost" onClick={() => setManual((m) => !m)}>
-        {manual ? "Back to camera" : "Camera not working? Confirm manually"}
-      </Button>
+      <PowerBar value={powerPercent(room.systems)} />
     </Screen>
   );
 }

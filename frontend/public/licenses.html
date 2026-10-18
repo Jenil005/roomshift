@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RoomShift Credits</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0 auto; padding: 24px 16px 48px; max-width: 760px; font: 16px/1.6 system-ui, -apple-system, sans-serif; background: #06110b; color: #d8e8c8; }
+      a { color: #7cf29a; }
+      h1, h2 { line-height: 1.2; color: #ffb23f; }
+      h2 { font-size: 18px; margin-top: 28px; }
+      code { font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <p><a href="./">← Back to RoomShift</a></p>
+    <h1>Credits and licenses</h1>
+
+    <h2>Niantic XR Engine (8th Wall) 1.0.0</h2>
+    <p>World-tracked AR uses the XR Engine by Niantic Spatial, Inc., distributed unmodified as <code>@8thwall/engine-binary</code> 1.0.0. Copyright © 2026 Niantic Spatial, Inc. All rights reserved.
+      Licensed under the <a href="./external/xr/LICENSE">XR Engine License Agreement</a> (package copy: <a href="./external/xr/LICENSE-package">LICENSE-package</a>), including its warranty disclaimer. Provided as is, without warranties.
+      SHA-256 hashes of the served files: <a href="./external/runtime-manifest.json">runtime-manifest.json</a>.</p>
+
+    <h2>Three.js 0.183.2</h2>
+    <p>3D rendering. MIT License, <a href="./external/licenses/three-LICENSE.txt">license text</a>.</p>
+
+    <h2>TensorFlow.js 4.22.0 and COCO-SSD 2.2.3</h2>
+    <p>On-device object detection (<code>@tensorflow/tfjs-core</code>, <code>-converter</code>, <code>-backend-webgl</code>, <code>-backend-cpu</code>, <code>@tensorflow-models/coco-ssd</code>). Apache License 2.0, <a href="https://www.apache.org/licenses/LICENSE-2.0">license text</a>, source at <a href="https://github.com/tensorflow/tfjs">tensorflow/tfjs</a> and <a href="https://github.com/tensorflow/tfjs-models/tree/master/coco-ssd">tensorflow/tfjs-models</a>.
+      The SSDLite MobileNet v2 model (trained on COCO by the TensorFlow Object Detection API, Apache-2.0) is served from this site. It recognizes books and cups; it has <strong>no keys class</strong>, so KEYS is identified by its printed QR tag.</p>
+
+    <h2>MediaPipe Tasks Vision 1.0.1 and EfficientDet-Lite0</h2>
+    <p>Optional on-device detector (<code>?detector=mediapipe</code>). Apache License 2.0, <a href="https://www.apache.org/licenses/LICENSE-2.0">license text</a>, source at <a href="https://github.com/google-ai-edge/mediapipe">google-ai-edge/mediapipe</a>.
+      The EfficientDet-Lite0 float16 model is served from this site (<a href="./models/mediapipe/NOTICE.md">notice</a>). Like COCO-SSD it has <strong>no keys class</strong>.</p>
+
+    <h2>jsQR 1.4.0</h2>
+    <p>QR tag decoding. Apache License 2.0, <a href="./external/licenses/jsqr-LICENSE.txt">license text</a>.</p>
+
+    <h2>qrcode 1.5.4</h2>
+    <p>Lobby join QR codes. MIT License, source at <a href="https://github.com/soldair/node-qrcode">soldair/node-qrcode</a>.</p>
+
+    <h2>React 19.3.1</h2>
+    <p>User interface. MIT License, source at <a href="https://github.com/facebook/react">facebook/react</a>.</p>
+
+    <h2>Fonts</h2>
+    <p>MGS1 HUD, MGS1 Codec and MGS1 Ammo by Andrew Gleeson, <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC BY-SA 4.0</a>.
+      After Burner Neue by Sweeep (<a href="http://www.sweeep.fr">sweeep.fr</a>), free for personal and commercial use, unmodified; <a href="./external/licenses/after-burner-neue-README.txt">author's read-me</a>.</p>
+
+    <h2>The facility</h2>
+    <p>The Blackout Protocol facility is built from code (Three.js primitives and procedural canvas textures); it contains no third-party 3D models or image textures.</p>
+
+    <h2>Privacy</h2>
+    <p>Camera frames are processed on your phone and never uploaded. Only object positions (or your manual report) are sent to the game server.</p>
+  </body>
+</html>

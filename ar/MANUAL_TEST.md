@@ -61,7 +61,7 @@ What can be tested today:
 25. Start a scan, then lock the phone and unlock it. The camera was released, and scanning resumes or asks to restart.
 26. Deny camera permission (reset site permissions first). The manual code field appears and is reachable in at most 2 taps. Entering the sequence by hand works. On an iPhone, tapping a dropdown must not zoom the page, and on phones up to about 430 px wide the three dropdowns are stacked and read "Select object" in full.
 27. Open the page over plain HTTP. You see an "insecure context" message and the manual field. The page must not crash or hang.
-28. Tap **Clear scans** and confirm the list empties. (Sending the sequence in `puzzle:submit` needs the frontend integration, Task A4. Only the backend's answer may move the game forward.)
+28. Tap **Clear scans** and confirm the list empties. (In the game, the scanner's result is sent as `puzzle:submit` evidence and only the backend's answer moves the game forward; the full two-phone check is `docs/IPHONE_FINAL_ACCEPTANCE.md`.)
 
 ## D. Marker order puzzle, existing jsQR prototype (one phone at a time)
 

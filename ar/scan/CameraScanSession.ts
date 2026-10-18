@@ -1,3 +1,4 @@
+import { reportDebug } from "../debugChannel";
 import { detectMarkers } from "../detectMarkers";
 import { MAX_FRAME_GAP_MS } from "../physicalOrder";
 import type {
@@ -92,6 +93,7 @@ export class CameraScanSession implements ScanSession {
     }
     this.stream = stream;
     this.video = video;
+    reportDebug({ camera: "QR scanner live", detector: "QR (jsQR)" });
     stream.getVideoTracks().forEach((track) =>
       track.addEventListener("ended", () => this.end("track-ended"), {
         once: true,
@@ -114,6 +116,7 @@ export class CameraScanSession implements ScanSession {
     this.generation += 1;
     cancelAnimationFrame(this.animation);
     document.removeEventListener("visibilitychange", this.onVisibility);
+    if (this.stream) reportDebug({ camera: "released" });
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = undefined;
     if (this.video) this.video.srcObject = null;

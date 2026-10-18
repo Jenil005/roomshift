@@ -19,3 +19,9 @@ export const SCOPE_ID = `app:${APP_ID}`
 
 /** Roles and display config — imported from SDK (single source of truth) */
 export { ROLES, ROLE_CONFIG, type Role } from 'deepspace'
+
+/**
+ * The ONE player-facing game (the frontend/ PWA on Netlify). This backend serves the game API
+ * and points players there; it does not host a second game UI.
+ */
+export const PLAY_URL = 'https://remarkable-taffy-417014.netlify.app'

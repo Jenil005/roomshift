@@ -18,14 +18,16 @@
     "check:room-runtime": "node ar/scripts/check-room-runtime.mjs"
   },
   "dependencies": {
+    "@8thwall/engine-binary": "1.0.0",
+    "@mediapipe/tasks-vision": "1.0.1",
     "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow/tfjs-backend-cpu": "4.22.0",
     "@tensorflow/tfjs-backend-webgl": "^4.22.0",
     "@tensorflow/tfjs-converter": "^4.22.0",
     "@tensorflow/tfjs-core": "^4.22.0",
     "jsqr": "^1.4.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "@8thwall/engine-binary": "1.0.0",
     "three": "0.183.2"
   },
   "devDependencies": {
@@ -34,12 +36,12 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@types/three": "^0.170.0",
     "@vitejs/plugin-react": "^5.0.4",
     "qrcode": "^1.5.4",
     "typescript": "~5.9.3",
     "vite": "^7.1.10",
-    "vitest": "^3.2.4",
-    "@types/three": "^0.170.0"
+    "vitest": "^3.2.4"
   },
   "engines": {
     "node": "^22.12.0 || ^24.0.0"

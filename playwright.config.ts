@@ -14,6 +14,9 @@ export default defineConfig({
         (existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
     },
     screenshot: "only-on-failure",
+    // Chromium now exposes the iOS-style motion permission API; without a grant it reports
+    // "denied". Grant sensors as a player would (the app's denial path is tested separately).
+    permissions: ["accelerometer", "gyroscope", "magnetometer"],
   },
   webServer: {
     command: "npm run dev -- --host 127.0.0.1 --port 5173 --strictPort",

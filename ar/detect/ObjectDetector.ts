@@ -1,5 +1,5 @@
 import type { MarkerId } from "../types";
-import type { RawDetection } from "./objectClasses";
+import type { ConfidenceThresholds, RawDetection } from "./objectClasses";
 
 export type DetectorErrorCode = "unsupported" | "model-failed" | "timeout";
 
@@ -22,6 +22,8 @@ export interface ObjectDetector {
   readonly name: string;
   /** Detector class name -> puzzle object id. Unlisted classes are shown but never used. */
   readonly classMap: Readonly<Record<string, MarkerId>>;
+  /** Per-class minimum scores for THIS model (scores are not comparable across models). Default: AI_CONFIDENCE. */
+  readonly thresholds?: ConfidenceThresholds;
   /** Detects objects in one frame. Boxes are in pixels of `frame`. */
   detect(frame: HTMLCanvasElement): Promise<RawDetection[]>;
 }

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>RoomShift Diagnostics</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; padding: max(16px, env(safe-area-inset-top)) 16px 32px; font: 15px/1.5 ui-monospace, Menlo, monospace; background: #06110b; color: #d8e8c8; }
+      h1 { font-size: 18px; color: #ffb23f; }
+      button { min-height: 44px; margin: 4px 4px 4px 0; padding: 8px 12px; font: inherit; background: #2c4a36; color: #d8e8c8; border: 2px solid #5e8c66; }
+      pre { white-space: pre-wrap; word-break: break-word; background: #16291d; padding: 10px; }
+      a { color: #7cf29a; }
+    </style>
+  </head>
+  <body>
+    <p><a href="./">← Back to RoomShift</a></p>
+    <h1>Device diagnostics</h1>
+    <p>For testers. Nothing here is uploaded. The camera opens only when you tap, for one frame, then closes.</p>
+    <pre id="env">Checking…</pre>
+    <div>
+      <button id="load-mediapipe">Load MediaPipe</button>
+      <button id="load-coco">Load COCO-SSD</button>
+      <button id="frame">Detect on one camera frame</button>
+      <button id="release">Release models</button>
+    </div>
+    <pre id="log" aria-live="polite"></pre>
+    <script type="module" src="/src/diagnostics/main.ts"></script>
+  </body>
+</html>

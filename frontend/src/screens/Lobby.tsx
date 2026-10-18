@@ -1,45 +1,64 @@
-import { useGame } from "../game/GameProvider";
-import { Button, ErrorLine, Heading, Label, Screen } from "../ui/kit";
+import { MAX_PLAYERS, MIN_PLAYERS } from "@shared/constants";
+import { useGame, useMe } from "../game/useGame";
+import { Button, Heading, Label, Screen } from "../ui/kit";
+import { ServerError } from "../ui/ServerError";
+import { JoinQr } from "../ui/JoinQr";
 
 export function Lobby() {
-  const { state, selfId, send } = useGame();
-  if (!state) return null;
-  const me = state.players.find((p) => p.id === selfId);
-  const allReady = state.players.length >= 2 && state.players.every((p) => p.ready);
+  const { room, selfId, send, pending } = useGame();
+  const me = useMe();
+  if (!room) return null;
+  const connected = room.players.filter((p) => p.connected).length;
+  const ready = room.phase === "READY"; // the server decides: enough connected players, all ready
+  const joinUrl = `${location.origin}${location.pathname}?room=${room.code}`;
 
   return (
     <Screen>
       <div className="flex flex-col">
         <Label>Facility 04, sublevel B</Label>
-        <Heading className="text-emergency">Room {state.roomCode}</Heading>
+        <Heading className="text-emergency">Room {room.code}</Heading>
       </div>
-      <p className="m-0 bg-panel p-3 bevel-raised">
-        Join at this site with code <span className="text-emergency">{state.roomCode}</span>.
-      </p>
+      <div className="flex items-center gap-3 bg-panel p-3 bevel-raised">
+        <JoinQr url={joinUrl} />
+        <div className="flex min-w-0 flex-col gap-1">
+          <span>Teammates scan the code, or enter</span>
+          <span className="font-display text-[32px] leading-none tracking-widest text-emergency">{room.code}</span>
+          <span className="break-all text-[12px] text-label">{joinUrl}</span>
+        </div>
+      </div>
 
       <section className="flex flex-col gap-2">
-        <h2 className="m-0 font-display text-[20px] font-normal text-label">Operatives {state.players.length} of 3</h2>
+        <h2 className="m-0 font-display text-[20px] font-normal text-label">Operatives {room.players.length} of {MAX_PLAYERS}</h2>
         <ul className="m-0 flex list-none flex-col bg-inset p-0 bevel-sunken">
-          {state.players.map((p) => (
+          {room.players.map((p) => (
             <li key={p.id} className="player-entry flex items-center gap-3 border-b-2 border-rule p-3 last:border-b-0">
-              <span className="flex-1">{p.id === selfId ? `${p.name} (you)` : p.name}{p.isHost ? " · host" : ""}</span>
-              <span className={p.ready ? "text-phosphor" : "text-emergency"}>{p.ready ? "Ready" : "Standing by"}</span>
+              <span className={`flex-1 ${p.connected ? "" : "text-bevel"}`}>
+                {p.id === selfId ? `${p.name} (you)` : p.name}{p.isHost ? " · host" : ""}{p.connected ? "" : " · signal lost"}
+              </span>
+              <span className={p.isReady ? "text-phosphor" : "text-emergency"}>{p.isReady ? "Ready" : "Standing by"}</span>
             </li>
           ))}
         </ul>
       </section>
 
       <div className="flex-1" />
-      <p className="m-0 text-soft">Roles are assigned when everyone is ready. Each of you will see something the others can’t.</p>
-      <ErrorLine message={state.lastError} />
-      <Button variant={me?.ready ? "ghost" : "primary"} onClick={() => send({ type: "player:ready", ready: !me?.ready })}>
-        {me?.ready ? "Not ready" : "Ready up"}
+      <p className="m-0 text-soft">
+        {connected < MIN_PLAYERS
+          ? `Waiting for at least ${MIN_PLAYERS} operatives.`
+          : ready
+            ? "Everyone is ready. The host can start the mission."
+            : "Roles are assigned when everyone is ready. Each of you will see something the others can’t."}
+      </p>
+      <ServerError actions={["room:ready", "game:start", "room:leave"]} />
+      <Button variant={me?.isReady ? "ghost" : "primary"} disabled={pending === "room:ready"} onClick={() => void send({ type: "room:ready", ready: !me?.isReady })}>
+        {me?.isReady ? "Not ready" : "Ready up"}
       </Button>
       {me?.isHost && (
-        <Button variant="secondary" disabled={!allReady} onClick={() => send({ type: "game:start" })}>
+        <Button variant="secondary" disabled={!ready || pending === "game:start"} onClick={() => void send({ type: "game:start" })}>
           Start mission
         </Button>
       )}
+      <Button variant="ghost" onClick={() => void send({ type: "room:leave" })}>Leave room</Button>
     </Screen>
   );
 }
