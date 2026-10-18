@@ -21,7 +21,10 @@ export default defineConfig({
     alias: { '@shared': fromHere('../shared') },
     dedupe: ['react', 'react-dom', 'three', 'jsqr', '@tensorflow/tfjs-core', '@tensorflow/tfjs-converter', '@tensorflow/tfjs-backend-webgl', '@tensorflow/tfjs-backend-cpu', '@tensorflow-models/coco-ssd', '@mediapipe/tasks-vision'],
   },
-  server: { fs: { allow: [fromHere('..')] } },
+  server: {
+    allowedHosts: ['assume-surgeon-raid-predicted.trycloudflare.com'],
+    fs: { allow: [fromHere('..')] },
+  },
   // Second page: tester diagnostics (detector load/inference timing on the real device).
   build: { rollupOptions: { input: { main: fromHere('index.html'), diagnostics: fromHere('diagnostics.html') } } },
   // Playwright specs live in e2e/ and run with `npm run test:e2e`.
