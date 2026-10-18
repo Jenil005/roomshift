@@ -115,8 +115,8 @@ test("two browsers play a full live mission: private clues, rejoin, sequential o
   await expect(b.getByText("Your fragment")).toBeVisible();
   expect((await paperLines(b)).join(" ")).toBe(clueB);
 
-  await expect(b.getByRole("button", { name: "Begin now" })).toHaveCount(0); // host only
-  await a.getByRole("button", { name: "Begin now" }).click();
+  await expect(b.getByRole("button", { name: "Proceed" })).toHaveCount(0); // host only
+  await a.getByRole("button", { name: "Proceed" }).click();
   await expect(b.getByText("Puzzle 1 of 3")).toBeVisible();
 
   // B files a wrong manual report: the SERVER rejects it.

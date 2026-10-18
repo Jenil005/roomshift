@@ -41,6 +41,7 @@ CORS is open on `/api/*` (`Access-Control-Allow-Origin: *`, preflight allows `PO
 1. `puzzle2:draft { order }` replaces the shared draft (`room.puzzle2.draft`). It is last-writer-wins: fetch the room right before editing (the game does) and expect a rare lost edit when two phones tap within one round trip. `puzzle:submit { puzzle: 2, order }` submits; wrong answers set `retryAfterMs` (3 s, 6 s, 10 s). Hints appear in `room.puzzle2.hints`.
 2. `final:press { held: true | false }` on press and release. The door opens when every connected player holds. `room.final.holding` lists who is holding. After `room.final.forceAvailableAt` the host may send `final:force`.
 3. Host-only: `game:start`, `intro:skip`, `final:force`, `game:reset` (back to LOBBY for a replay).
+   `intro:skip` is the role reveal's **Proceed** button: INTRO never auto-advances. It moves everyone to PUZZLE_1 and stamps `room.missionStartedAt`; clients show an 8-minute countdown (`MISSION_DURATION_MS`) from it. `game:reset` clears it. Reaching 00:00 is display only.
 
 ## 5. Testing
 
